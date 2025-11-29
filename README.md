@@ -38,9 +38,6 @@ The `data/` directory contains sample credit application data used for training 
 
 ## License
 
-[Add your license here]
+[LICENSE](LICENSE)
 
-## Contributing
-
-[Add contributing guidelines here]
 
