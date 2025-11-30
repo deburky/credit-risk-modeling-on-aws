@@ -30,7 +30,7 @@ cd real_time_scoring/local && make run-workflow
 ```
 
 > [!NOTE]
-> See the [real_time_scoring/README.md](real_time_scoring/README.md) for detailed instructions.
+> See the [real_time_scoring/local/README.md](real_time_scoring/local/README.md) for detailed instructions.
 
 ## 📄 License
 
