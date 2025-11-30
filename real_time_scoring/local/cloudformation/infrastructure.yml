@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Credit Scoring Infrastructure - LocalStack Compatible'
+
+Resources:
+  # S3 Bucket for Model Storage
+  ModelBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: credit-scoring-models
+  # Kinesis Data Stream for Loan Applications
+  ApplicationsStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: LoanApplicationsStream
+      ShardCount: 1
+      RetentionPeriodHours: 24
+
+  # DynamoDB Table for Approved Applications
+  ApprovedApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ApprovedApplications
+      AttributeDefinitions:
+        - AttributeName: application_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: application_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CreditScoringLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt ApprovedApplicationsTable.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ModelBucket.Arn
+                  - !Sub '${ModelBucket.Arn}/*'
+
+  # Lambda Function for Credit Scoring
+  CreditScoringLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CreditScoringLambda
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref ApprovedApplicationsTable
+          S3_BUCKET: !Ref ModelBucket
+          MODEL_S3_KEY: models/model.tar.gz
+          LOCALSTACK_ENDPOINT: http://localhost:4566
+      Code:
+        S3Bucket: !Ref ModelBucket
+        S3Key: lambda/credit-scoring-lambda.zip
+
+  # Event Source Mapping: Kinesis -> Lambda
+  KinesisEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ApplicationsStream.Arn
+      FunctionName: !Ref CreditScoringLambda
+      StartingPosition: LATEST
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+
+Outputs:
+  KinesisStreamName:
+    Description: Name of the Kinesis stream for loan applications
+    Value: !Ref ApplicationsStream
+    Export:
+      Name: LoanApplicationsStreamName
+
+  KinesisStreamArn:
+    Description: ARN of the Kinesis stream
+    Value: !GetAtt ApplicationsStream.Arn
+    Export:
+      Name: LoanApplicationsStreamArn
+
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table for approved applications
+    Value: !Ref ApprovedApplicationsTable
+    Export:
+      Name: ApprovedApplicationsTableName
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref CreditScoringLambda
+    Export:
+      Name: CreditScoringLambdaName
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt CreditScoringLambda.Arn
+    Export:
+      Name: CreditScoringLambdaArn
+

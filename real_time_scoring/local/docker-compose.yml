@@ -1,0 +1,31 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: real-time-scoring-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - DATA_DIR=/var/lib/localstack
+      - LAMBDA_EXECUTOR=local
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      # Increase Lambda package size limits (defaults: 50MB zipped, 250MB unzipped)
+      # This allows ML packages like pandas, numpy, scikit-learn, fastwoe
+      # Note: These may not work in all LocalStack versions - if deployment fails,
+      # the package size is the limitation (not a code issue)
+      # Zipped package limit (our package is ~100MB) - 150MB
+      - LAMBDA_LIMITS_CODE_SIZE_ZIPPED=157286400
+      # Unzipped package limit (our package is ~250-300MB unzipped) - 500MB  
+      - LAMBDA_LIMITS_MAX_FUNCTION_PAYLOAD_SIZE_BYTES=524288000
+      # Alternative variable name (try both)
+      - LAMBDA_LIMITS_CODE_SIZE_UNZIPPED=524288000
+    volumes:
+      - ./localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./localstack-config.toml:/etc/localstack/localstack-config.toml:ro
+
+
+
+
+
+

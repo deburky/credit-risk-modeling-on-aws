@@ -1,0 +1,7 @@
+# Lambda function dependencies only (excludes sagemaker - only needed for training)
+boto3>=1.28.0
+pandas>=2.0.0
+numpy<2.0.0,>=1.24.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+fastwoe>=0.1.5rc1

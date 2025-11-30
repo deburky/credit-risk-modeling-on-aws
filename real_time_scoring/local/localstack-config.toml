@@ -1,0 +1,6 @@
+[lambda]
+# Increase Lambda package size limits
+
+code_size_zipped = 157286400  # 150MB
+max_function_payload_size_bytes = 1073741824  # 1GB
+code_size_unzipped = 1073741824  # 1GB
