@@ -12,9 +12,13 @@ build/
 venv/
 env/
 ENV/
-.venv
+.venv/
+uv.lock
 
-# IDE
+# Zip files
+*.zip
+
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
@@ -45,3 +49,6 @@ logs/
 # Temporary files
 *.tmp
 tmp/
+
+# Assets (if these are generated or not needed in repo)
+assets/

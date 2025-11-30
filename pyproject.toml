@@ -1,0 +1,22 @@
+[project]
+name = "credit-risk-modeling-on-aws"
+version = "0.1.0"
+description = "Credit Risk Modeling on AWS"
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "diagrams>=0.24.4",
+    "requests>=2.31.0",
+    "matplotlib>=3.7.0",
+    "pillow>=10.0.0",
+    "numpy<2",
+    "pycairo>=1.29.0",
+    "auto-uv>=0.1.2",
+    "pyauto-dotenv>=0.1.0",
+    "fastwoe>=0.1.4.post2",
+    "psycopg2-binary>=2.9.11",
+    "catboost>=1.2.8",
+    "boto3>=1.41.5",
+    "sagemaker==2.180.0",
+    "setuptools>=65.0.0",
+]

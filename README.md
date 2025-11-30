@@ -1,43 +1,46 @@
-# Credit Risk Modeling on AWS
+# 📚 Credit Risk Modeling on AWS ☁️
 
 This repository contains code examples and implementations from the **Credit Risk Modeling on AWS** book project.
 
-## Overview
+Author: [Denis Burakov](https://github.com/deburky)
 
-This project demonstrates real-time credit risk scoring using AWS services, including model training, deployment, and inference pipelines.
+## 🧩 Use Cases
 
-## Project Structure
+This project demonstrates several credit risk modeling use cases using AWS services, including model training, deployment, and inference pipelines.
 
-```
-.
-├── data/                    # Sample credit data
-│   └── credit_example.csv
-└── real_time_scoring/       # Real-time scoring implementation
-    ├── README.md           # Detailed documentation
-    ├── Makefile            # Build and deployment commands
-    └── ...
-```
+> [!IMPORTANT]  
+> To run the code examples, you need to have Docker installed and have AWS credentials to use SageMaker local mode. You can get AWS credentials by creating an AWS account and then creating an IAM user with the necessary permissions.
 
-## Getting Started
+### 🚀 Real-Time Credit Scoring
 
-### Real-Time Credit Scoring
+![Image](real_time_scoring/credit_scoring_diagram.png)
 
 The `real_time_scoring/` folder contains a complete implementation of a real-time credit scoring system using:
 
-- **LocalStack** for local AWS service emulation
+- **SageMaker** for model training
 - **Kinesis** for streaming loan applications
 - **Lambda** for real-time scoring
 - **DynamoDB** for storing approved applications
 - **CloudFormation** for infrastructure as code
 
-See the [real_time_scoring/README.md](real_time_scoring/README.md) for detailed instructions.
+Run the workflow using the Makefile:
 
-## Data
+```bash
+cd real_time_scoring/local && make run-workflow
+```
 
-The `data/` directory contains sample credit application data used for training and testing the models.
+> [!NOTE]
+> See the [real_time_scoring/README.md](real_time_scoring/README.md) for detailed instructions.
 
-## License
+## 📄 License
 
 [LICENSE](LICENSE)
+
+## 🔗 References
+
+* [Amazon SageMaker - Run Pipelines Using Local Mode](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines-local-mode.html)
+* [An Unsung Hero of Amazon SageMaker: Local Mode](https://www.tecracer.com/blog/2024/06/an-unsung-hero-of-amazon-sagemaker-local-mode.html)
+* [AWS in Plain English - Develop AWS ML Workloads Locally with LocalStack and SAM](https://aws.plainenglish.io/develop-aws-ml-workloads-locally-with-localstack-and-sam-24bdc0de81aa)
+* [GitHub - aws-samples/amazon-sagemaker-local-mode](https://github.com/aws-samples/amazon-sagemaker-local-mode)
 
 
