@@ -1,0 +1,7 @@
+[lambda]
+# Increase Lambda package size limits
+# Defaults: 50MB zipped, 250MB unzipped
+# ML packages can be large
+code_size_zipped = 157286400  # 150MB
+max_function_payload_size_bytes = 524288000  # 500MB
+

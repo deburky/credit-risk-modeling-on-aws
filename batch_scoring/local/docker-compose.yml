@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: batch-scoring-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=creditrisk
+      - POSTGRES_PASSWORD=creditrisk123
+      - POSTGRES_DB=credit_scoring
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creditrisk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: batch-scoring-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - DATA_DIR=/var/lib/localstack
+      - LAMBDA_EXECUTOR=local
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - SERVICES=lambda,stepfunctions,iam,s3,cloudformation,events,sts
+      # Increase Lambda package size limits
+      - LAMBDA_LIMITS_CODE_SIZE_ZIPPED=157286400
+      - LAMBDA_LIMITS_MAX_FUNCTION_PAYLOAD_SIZE_BYTES=524288000
+      - LAMBDA_LIMITS_CODE_SIZE_UNZIPPED=524288000
+    volumes:
+      - ./localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./localstack-config.toml:/etc/localstack/localstack-config.toml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+

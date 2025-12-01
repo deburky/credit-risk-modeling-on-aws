@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Batch Scoring & Limit Increase - Step Functions Workflow'
+
+Resources:
+  # IAM Role for Lambda Functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LimitIncreaseLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SageMakerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: '*'
+
+  # IAM Role for Step Functions
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LimitIncreaseStepFunctionsRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt QueryBatchScoresLambda.Arn
+                  - !GetAtt SageMakerInferenceLambda.Arn
+                  - !GetAtt EvaluateLimitIncreaseLambda.Arn
+                  - !GetAtt UpdateDatabaseLambda.Arn
+
+  # Lambda: Query Batch Scores
+  QueryBatchScoresLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: QueryBatchScoresLambda
+      Runtime: python3.11
+      Handler: query_batch_scores.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          DB_HOST: postgres
+          DB_PORT: '5432'
+          DB_NAME: credit_scoring
+          DB_USER: creditrisk
+          DB_PASSWORD: creditrisk123
+      Code:
+        ZipFile: |
+          # Lambda code will be packaged separately
+
+  # Lambda: SageMaker Inference
+  SageMakerInferenceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: SageMakerInferenceLambda
+      Runtime: python3.11
+      Handler: sagemaker_inference.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          SAGEMAKER_ENDPOINT: credit-scoring-endpoint
+          LOCALSTACK_ENDPOINT: http://localhost:4566
+      Code:
+        ZipFile: |
+          # Lambda code will be packaged separately
+
+  # Lambda: Evaluate Limit Increase
+  EvaluateLimitIncreaseLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: EvaluateLimitIncreaseLambda
+      Runtime: python3.11
+      Handler: evaluate_limit_increase.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          # Lambda code will be packaged separately
+
+  # Lambda: Update Database
+  UpdateDatabaseLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: UpdateDatabaseLambda
+      Runtime: python3.11
+      Handler: update_database.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          DB_HOST: postgres
+          DB_PORT: '5432'
+          DB_NAME: credit_scoring
+          DB_USER: creditrisk
+          DB_PASSWORD: creditrisk123
+      Code:
+        ZipFile: |
+          # Lambda code will be packaged separately
+
+  # Step Functions State Machine
+  LimitIncreaseStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: LimitIncreaseWorkflow
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Credit Limit Increase Workflow",
+          "StartAt": "QueryBatchScores",
+          "States": {
+            "QueryBatchScores": {
+              "Type": "Task",
+              "Resource": "${QueryBatchScoresLambda.Arn}",
+              "Next": "SageMakerInference"
+            },
+            "SageMakerInference": {
+              "Type": "Task",
+              "Resource": "${SageMakerInferenceLambda.Arn}",
+              "Next": "EvaluateLimitIncrease"
+            },
+            "EvaluateLimitIncrease": {
+              "Type": "Task",
+              "Resource": "${EvaluateLimitIncreaseLambda.Arn}",
+              "Next": "UpdateDatabase"
+            },
+            "UpdateDatabase": {
+              "Type": "Task",
+              "Resource": "${UpdateDatabaseLambda.Arn}",
+              "End": true
+            }
+          }
+        }
+
+  # EventBridge Rule - Schedule Step Functions execution
+  # Runs daily at 2 AM UTC (can be customized)
+  LimitIncreaseScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: LimitIncreaseDailySchedule
+      Description: Trigger limit increase workflow daily
+      ScheduleExpression: cron(0 2 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LimitIncreaseStateMachine.Arn
+          Id: LimitIncreaseWorkflowTarget
+          RoleArn: !GetAtt EventBridgeInvokeRole.Arn
+
+  # IAM Role for EventBridge to invoke Step Functions
+  EventBridgeInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EventBridgeStepFunctionsInvokeRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartStepFunctionsExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt LimitIncreaseStateMachine.Arn
+
+Outputs:
+  StateMachineArn:
+    Description: ARN of the Step Functions state machine
+    Value: !GetAtt LimitIncreaseStateMachine.Arn
+    Export:
+      Name: LimitIncreaseStateMachineArn
+
+  StateMachineName:
+    Description: Name of the Step Functions state machine
+    Value: !Ref LimitIncreaseStateMachine
+    Export:
+      Name: LimitIncreaseStateMachineName
+
+  EventBridgeRuleName:
+    Description: Name of the EventBridge scheduled rule
+    Value: !Ref LimitIncreaseScheduleRule
+    Export:
+      Name: LimitIncreaseScheduleRuleName
+
