@@ -21,8 +21,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_data(data_path="../data/credit_example.csv"):
+def load_data(data_path=None):
     """Load credit data"""
+    if data_path is None:
+        from pathlib import Path
+
+        data_path = Path(__file__).parent.parent.parent / "data" / "credit_example.csv"
     logger.info(f"Loading data from {data_path}")
     df = pd.read_csv(data_path)
     logger.info(f"Data shape: {df.shape}")

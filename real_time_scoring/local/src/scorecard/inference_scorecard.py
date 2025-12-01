@@ -17,11 +17,22 @@ logger = logging.getLogger(__name__)
 class CreditScorecard:
     """Credit scorecard for application scoring"""
 
-    def __init__(self, model_dir="model_output"):
+    def __init__(self, model_dir=None):
         """Load trained pipeline and metadata"""
-        self.pipeline = joblib.load(f"{model_dir}/scorecard_pipeline.joblib")
+        if model_dir is None:
+            from pathlib import Path
 
-        with open(f"{model_dir}/scorecard_metadata.json", "r") as f:
+            # Look for model_output in parent directory (local/)
+            base_dir = Path(__file__).parent.parent.parent
+            model_dir = base_dir / "model_output"
+        else:
+            from pathlib import Path
+
+            model_dir = Path(model_dir)
+
+        self.pipeline = joblib.load(str(model_dir / "scorecard_pipeline.joblib"))
+
+        with open(model_dir / "scorecard_metadata.json", "r") as f:
             self.metadata = json.load(f)
 
         self.cutoff = self.metadata["cutoff"]
@@ -169,4 +180,5 @@ def test_inference():
 
 
 if __name__ == "__main__":
+    test_inference()
     test_inference()

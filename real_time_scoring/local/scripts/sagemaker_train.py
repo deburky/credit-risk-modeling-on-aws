@@ -4,7 +4,6 @@ Stores model in LocalStack S3
 """
 
 import logging
-import os
 import subprocess
 from pathlib import Path
 
@@ -47,7 +46,7 @@ def setup_s3_bucket():
 
 def build_docker_image(image_name="credit-scoring-sagemaker:latest"):
     """Build custom Docker image for SageMaker training"""
-    dockerfile_path = Path(__file__).parent / "Dockerfile"
+    dockerfile_path = Path(__file__).parent.parent / "Dockerfile"
 
     if not dockerfile_path.exists():
         raise FileNotFoundError(f"Dockerfile not found: {dockerfile_path}")
@@ -88,7 +87,7 @@ def build_docker_image(image_name="credit-scoring-sagemaker:latest"):
 
 def upload_training_data(s3_client):
     """Upload training data to S3"""
-    data_path = Path("../data/credit_example.csv")
+    data_path = Path(__file__).parent.parent.parent / "data" / "credit_example.csv"
 
     if not data_path.exists():
         raise FileNotFoundError(f"Training data not found: {data_path}")
@@ -122,8 +121,9 @@ def train_with_sagemaker_local():
     sagemaker_session.config = {"local": {"local_code": True}}
 
     # Use local file paths for training
-    train_data_local = "file://../data"
-    output_path_local = "file://./model_output"
+    base_dir = Path(__file__).parent.parent
+    train_data_local = f"file://{base_dir.parent / 'data'}"
+    output_path_local = f"file://{base_dir / 'model_output'}"
 
     # Build custom Docker image if not already built
     image_name = build_docker_image("credit-scoring-sagemaker:latest")
@@ -141,7 +141,7 @@ def train_with_sagemaker_local():
             "target-odds": 30,
             "pts-double-odds": 20,
         },
-        entry_point="training/train.py",
+        entry_point=str(base_dir / "training" / "train.py"),
     )
 
     logger.info("\nStarting SageMaker Local training...")
@@ -173,16 +173,16 @@ def upload_model_to_s3(s3_client):
     import tarfile
     from io import BytesIO
 
-    model_dir = "model_output"
-    if not os.path.exists(model_dir):
+    model_dir = Path(__file__).parent.parent / "model_output"
+    if not model_dir.exists():
         logger.warning(f"Model directory not found: {model_dir}")
         return
 
     # Check if we have the model files
-    model_path = os.path.join(model_dir, "model.joblib")
-    metadata_path = os.path.join(model_dir, "metadata.json")
+    model_path = model_dir / "model.joblib"
+    metadata_path = model_dir / "metadata.json"
 
-    if not os.path.exists(model_path) or not os.path.exists(metadata_path):
+    if not model_path.exists() or not metadata_path.exists():
         logger.warning(
             "Model files not found locally. SageMaker may have saved directly to S3."
         )
@@ -192,8 +192,8 @@ def upload_model_to_s3(s3_client):
     tar_buffer = BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
         # Add model.joblib and metadata.json
-        tar.add(model_path, arcname="model.joblib")
-        tar.add(metadata_path, arcname="metadata.json")
+        tar.add(str(model_path), arcname="model.joblib")
+        tar.add(str(metadata_path), arcname="metadata.json")
 
     tar_buffer.seek(0)
 
@@ -236,9 +236,10 @@ def download_model_from_s3(s3_client):
         tar_data = obj["Body"].read()
 
         # Extract to local model_output directory
-        os.makedirs("model_output", exist_ok=True)
+        model_dir = Path(__file__).parent.parent / "model_output"
+        model_dir.mkdir(exist_ok=True)
         with tarfile.open(fileobj=BytesIO(tar_data), mode="r:gz") as tar:
-            tar.extractall("model_output")
+            tar.extractall(str(model_dir))
 
         logger.info("✓ Model artifacts downloaded to model_output/")
 

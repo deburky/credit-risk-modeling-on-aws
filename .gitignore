@@ -15,6 +15,9 @@ ENV/
 .venv/
 uv.lock
 
+# Catboost
+catboost_info/
+
 # Zip files
 *.zip
 

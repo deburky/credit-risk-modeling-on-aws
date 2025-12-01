@@ -29,7 +29,9 @@ kinesis_client = boto3.client(
 
 def read_template():
     """Read CloudFormation template."""
-    template_path = Path(__file__).parent / "cloudformation" / "infrastructure.yml"
+    template_path = (
+        Path(__file__).parent.parent / "cloudformation" / "infrastructure.yml"
+    )
     with open(template_path, "r") as f:
         return f.read()
 
@@ -47,6 +49,10 @@ def setup_s3_bucket():
 
 def package_and_upload_lambda():
     """Package Lambda function and upload to S3."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent))
     from package_lambda import package_lambda
 
     logger.info("Packaging Lambda function...")
@@ -63,34 +69,28 @@ def package_and_upload_lambda():
 
 def force_cleanup_all_resources():
     """Aggressively clean up ALL resources before stack operations."""
-    logger.info("Performing aggressive resource cleanup...")
-
     # 1. Delete ALL event source mappings (even ones not in our stack)
     cleanup_event_source_mappings(aggressive=True)
 
     # 2. Try to delete the Lambda function directly if it exists
     try:
         lambda_client.delete_function(FunctionName="CreditScoringLambda")
-        logger.info("✓ Deleted Lambda function directly")
         time.sleep(2)  # Give LocalStack time to process
     except lambda_client.exceptions.ResourceNotFoundException:
-        logger.debug("Lambda function doesn't exist")
-    except Exception as e:
-        logger.debug(f"Could not delete Lambda function: {e}")
+        pass
+    except Exception:
+        pass
 
     # 3. Try to delete the Kinesis stream directly if it exists
     try:
         kinesis_client.delete_stream(
             StreamName="LoanApplicationsStream", EnforceConsumerDeletion=True
         )
-        logger.info("✓ Deleted Kinesis stream directly")
         time.sleep(2)  # Give LocalStack time to process
     except kinesis_client.exceptions.ResourceNotFoundException:
-        logger.debug("Kinesis stream doesn't exist")
-    except Exception as e:
-        logger.debug(f"Could not delete Kinesis stream: {e}")
-
-    logger.info("✓ Aggressive cleanup complete")
+        pass
+    except Exception:
+        pass
 
 
 def cleanup_event_source_mappings(aggressive=False):
@@ -106,77 +106,44 @@ def cleanup_event_source_mappings(aggressive=False):
         all_mappings = response.get("EventSourceMappings", [])
 
         if not all_mappings:
-            logger.info("No event source mappings found")
             return
 
         # Filter mappings to delete
         if aggressive:
             mappings_to_delete = all_mappings
-            logger.info(
-                f"Aggressive mode: Found {len(mappings_to_delete)} total mapping(s) to delete"
-            )
         else:
             mappings_to_delete = [
                 m
                 for m in all_mappings
                 if "LoanApplicationsStream" in m.get("EventSourceArn", "")
             ]
-            logger.info(
-                f"Found {len(mappings_to_delete)} mapping(s) related to LoanApplicationsStream"
-            )
 
         if not mappings_to_delete:
-            logger.info("No event source mappings to clean up")
             return
 
         # Delete each mapping
         for mapping in mappings_to_delete:
             uuid = mapping.get("UUID")
             state = mapping.get("State", "Unknown")
-            arn = mapping.get("EventSourceArn", "Unknown")
-
-            logger.info(f"Processing mapping {uuid} (State: {state}, ARN: {arn})")
 
             # Step 1: Disable if enabled
             if state in ["Enabled", "Enabling"]:
                 try:
-                    logger.info(f"  Disabling mapping {uuid}...")
                     lambda_client.update_event_source_mapping(UUID=uuid, Enabled=False)
                     _wait_for_mapping_state(
                         uuid, target_states=["Disabled", "Disabling"], timeout=15
                     )
-                except Exception as e:
-                    logger.debug(f"  Could not disable: {e}")
+                except Exception:
+                    pass
 
             # Step 2: Delete
             try:
-                logger.info(f"Deleting mapping {uuid}...")
                 lambda_client.delete_event_source_mapping(UUID=uuid)
                 _wait_for_mapping_deletion(uuid, timeout=30)
-                logger.info(f"✓ Deleted mapping {uuid}")
             except lambda_client.exceptions.ResourceNotFoundException:
-                logger.info(f"✓ Mapping {uuid} already deleted")
-            except Exception as e:
-                logger.warning(f"  ✗ Could not delete mapping {uuid}: {e}")
-
-        # Final verification
-        time.sleep(2)
-        response = lambda_client.list_event_source_mappings()
-        remaining = response.get("EventSourceMappings", [])
-
-        if not aggressive:
-            remaining = [
-                m
-                for m in remaining
-                if "LoanApplicationsStream" in m.get("EventSourceArn", "")
-            ]
-        remaining_count = len(remaining)
-        if remaining_count > 0:
-            logger.warning(f"⚠ {remaining_count} mapping(s) still remain after cleanup")
-            for m in remaining:
-                logger.warning(f"  - UUID: {m.get('UUID')}, State: {m.get('State')}")
-        else:
-            logger.info("✓ All event source mappings cleaned up successfully")
+                pass
+            except Exception:
+                pass
 
     except Exception as e:
         logger.warning(f"Error cleaning up event source mappings: {e}")
@@ -399,30 +366,21 @@ def show_stack_outputs():
 
 def delete_stack():  # sourcery skip: extract-duplicate-method
     """Delete CloudFormation stack"""
-    logger.info(f"Deleting stack: {STACK_NAME}")
-
-    # STEP 1: Force cleanup of all resources FIRST
-    logger.info("STEP 1: Pre-deletion cleanup")
+    # Cleanup resources first
     force_cleanup_all_resources()
     time.sleep(3)
 
-    # STEP 2: Delete the stack
-    logger.info("STEP 2: Deleting CloudFormation stack")
-
     try:
         cfn.delete_stack(StackName=STACK_NAME)
-        logger.info("Waiting for stack deletion...")
-
         waiter = cfn.get_waiter("stack_delete_complete")
         waiter.wait(StackName=STACK_NAME, WaiterConfig={"Delay": 5, "MaxAttempts": 60})
-        logger.info("✓ Stack deleted successfully!")
+        logger.info("✓ Stack deleted successfully")
 
     except cfn.exceptions.ClientError as e:
         if "does not exist" in str(e):
-            logger.info("Stack does not exist (already deleted)")
+            logger.info("Stack does not exist")
         else:
             logger.error(f"Error deleting stack: {e}")
-            # Try cleanup anyway
             force_cleanup_all_resources()
             raise
     except Exception as e:
@@ -432,35 +390,27 @@ def delete_stack():  # sourcery skip: extract-duplicate-method
             if stacks := response.get("Stacks", []):
                 status = stacks[0].get("StackStatus", "")
                 if status == "DELETE_FAILED":
-                    logger.warning(
-                        "Stack deletion failed, retrying with aggressive cleanup..."
-                    )
                     force_cleanup_all_resources()
                     time.sleep(5)
-
                     cfn.delete_stack(StackName=STACK_NAME)
                     waiter = cfn.get_waiter("stack_delete_complete")
                     waiter.wait(
                         StackName=STACK_NAME,
                         WaiterConfig={"Delay": 5, "MaxAttempts": 60},
                     )
-                    logger.info("✓ Stack deleted successfully on retry!")
+                    logger.info("✓ Stack deleted successfully")
                     return
         except cfn.exceptions.ClientError as check_error:
             if "does not exist" in str(check_error):
                 logger.info("✓ Stack deleted successfully")
-                force_cleanup_all_resources()  # Final cleanup
                 return
 
         logger.error(f"Error deleting stack: {e}")
-        force_cleanup_all_resources()  # Try cleanup anyway
+        force_cleanup_all_resources()
         raise
 
-    # STEP 3: Final cleanup to ensure nothing is left
-    logger.info("STEP 3: Post-deletion cleanup")
+    # Final cleanup
     force_cleanup_all_resources()
-
-    logger.info("\n✓ Stack and all resources deleted successfully!")
 
 
 def get_stack_status():
@@ -484,26 +434,27 @@ def get_stack_status():
 if __name__ == "__main__":
     import sys
 
-    logger.info("=" * 80)
-    logger.info("CloudFormation Stack Deployment (LocalStack)")
-    logger.info("=" * 80)
-
     if len(sys.argv) > 1:
         command = sys.argv[1]
 
         if command == "delete":
             delete_stack()
         elif command == "status":
+            logger.info("=" * 80)
+            logger.info("CloudFormation Stack Deployment (LocalStack)")
+            logger.info("=" * 80)
             get_stack_status()
             show_stack_outputs()
+            logger.info("=" * 80)
         elif command == "cleanup":
-            logger.info("Performing aggressive cleanup of all resources...")
             force_cleanup_all_resources()
             logger.info("✓ Cleanup complete")
         else:
             logger.error(f"Unknown command: {command}")
             logger.info("Usage: python deploy_stack.py [delete|status|cleanup]")
     else:
+        logger.info("=" * 80)
+        logger.info("CloudFormation Stack Deployment (LocalStack)")
+        logger.info("=" * 80)
         deploy_stack()
-
-    logger.info("=" * 80)
+        logger.info("=" * 80)

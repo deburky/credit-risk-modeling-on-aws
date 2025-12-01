@@ -22,7 +22,9 @@ def package_lambda():  # sourcery skip: extract-method
         tmpdir_path = Path(tmpdir)
 
         # Copy Lambda function
-        lambda_file = Path(__file__).parent / "lambda_function.py"
+        lambda_file = (
+            Path(__file__).parent.parent / "src" / "scorecard" / "lambda_function.py"
+        )
         shutil.copy(lambda_file, tmpdir_path / "index.py")
         print("✓ Copied Lambda function")
 
@@ -55,7 +57,11 @@ def package_lambda():  # sourcery skip: extract-method
                     "--python",
                     python_cmd or "python3",
                     "-r",
-                    str(Path(__file__).parent / "requirements_lambda.txt"),
+                    str(
+                        Path(__file__).parent.parent
+                        / "config"
+                        / "requirements_lambda.txt"
+                    ),
                     "--target",
                     str(tmpdir_path),
                     "--quiet",
@@ -72,7 +78,11 @@ def package_lambda():  # sourcery skip: extract-method
                     "pip",
                     "install",
                     "-r",
-                    str(Path(__file__).parent / "requirements_lambda.txt"),
+                    str(
+                        Path(__file__).parent.parent
+                        / "config"
+                        / "requirements_lambda.txt"
+                    ),
                     "-t",
                     str(tmpdir_path),
                     "--quiet",
@@ -192,7 +202,7 @@ def package_lambda():  # sourcery skip: extract-method
         print("✓ Installed and cleaned dependencies")
 
         # Create zip file
-        zip_path = Path(__file__).parent / "lambda_package.zip"
+        zip_path = Path(__file__).parent.parent / "lambda_package.zip"
         if zip_path.exists():
             zip_path.unlink()
 

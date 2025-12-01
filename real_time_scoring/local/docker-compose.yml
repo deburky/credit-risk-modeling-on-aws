@@ -22,7 +22,7 @@ services:
     volumes:
       - ./localstack_data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./localstack-config.toml:/etc/localstack/localstack-config.toml:ro
+      - ./config/localstack-config.toml:/etc/localstack/localstack-config.toml:ro
 
 
 

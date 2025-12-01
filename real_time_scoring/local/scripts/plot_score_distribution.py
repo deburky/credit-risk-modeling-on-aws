@@ -13,21 +13,31 @@ from matplotlib import rcParams
 rcParams["font.family"] = "Avenir"
 
 # Load trained model results
-with open("model_output/scorecard_metadata.json", "r") as f:
+from pathlib import Path
+
+base_dir = Path(__file__).parent.parent
+model_output_dir = base_dir / "model_output"
+
+with open(model_output_dir / "scorecard_metadata.json", "r") as f:
     metadata = json.load(f)
 
 # Load threshold analysis
-threshold_df = pd.read_csv("model_output/threshold_analysis.csv")
+threshold_df = pd.read_csv(model_output_dir / "threshold_analysis.csv")
+
+import sys
+from pathlib import Path
 
 # For visualization, we'll load the training data and recalculate scores
 import joblib
-from train_scorecard import load_data
+
+sys.path.insert(0, str(Path(__file__).parent))
+from local_train import load_data
 
 df = load_data()
 X = df.drop("Good_Bad", axis=1)
 y = 1 - df["Good_Bad"]
 
-pipeline = joblib.load("model_output/scorecard_pipeline.joblib")
+pipeline = joblib.load(model_output_dir / "scorecard_pipeline.joblib")
 
 # Calculate scores
 X_transformed = pipeline.named_steps["woe"].transform(X)
@@ -109,6 +119,12 @@ plt.savefig(
     dpi=300,
     bbox_inches="tight",
     facecolor="none",
+    transparent=True,
+)
+print("✓ Score distribution plot saved to: ../score_distribution.png")
+    transparent=True,
+)
+print("✓ Score distribution plot saved to: ../score_distribution.png")
     transparent=True,
 )
 print("✓ Score distribution plot saved to: ../score_distribution.png")

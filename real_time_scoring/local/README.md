@@ -118,25 +118,57 @@ The Lambda function:
 
 ## Files
 
+### Directory Structure
+```
+local/
+├── src/                          # Source code
+│   └── scorecard/                # Scorecard inference code
+│       ├── inference_scorecard.py  # Scorecard inference class
+│       └── lambda_function.py      # Lambda handler
+├── scripts/                      # Utility and deployment scripts
+│   ├── local_train.py            # Train WOE + LR scorecard (direct)
+│   ├── sagemaker_train.py        # SageMaker Local Mode training
+│   ├── deploy_stack.py           # Deploy/delete/status commands
+│   ├── package_lambda.py         # Package Lambda function
+│   ├── send_applications.py      # Generate and send test applications
+│   ├── check_approvals.py        # Query approved applications
+│   ├── plot_score_distribution.py # Generate score distribution plot
+│   └── verify_setup.py           # Verify end-to-end setup
+├── config/                       # Configuration files
+│   ├── localstack-config.toml    # LocalStack configuration
+│   ├── requirements.txt          # Python dependencies
+│   └── requirements_lambda.txt   # Lambda dependencies
+├── cloudformation/               # Infrastructure as code
+│   └── infrastructure.yml        # CloudFormation template
+├── training/                     # SageMaker training code
+│   ├── train.py                  # Training entry point
+│   └── requirements.txt          # Training dependencies
+├── model_output/                 # Trained model artifacts (generated)
+│   ├── scorecard_pipeline.joblib # Full pipeline (WOE + LR)
+│   ├── scorecard.csv             # Scorecard with points per WOE unit
+│   ├── scorecard_metadata.json   # Metadata (cutoff, gini, etc.)
+│   └── threshold_analysis.csv    # Threshold optimization results
+├── docker-compose.yml            # LocalStack configuration
+├── Dockerfile                    # Custom SageMaker training container
+├── Makefile                      # Build automation
+└── README.md                     # This file
+```
+
 ### Model Training & Inference
-- `train_scorecard.py` - Train WOE + LR scorecard, find optimal cutoff
-- `inference_scorecard.py` - Load model and score new applications
-- `model_output/` - Trained model artifacts
-  - `scorecard_pipeline.joblib` - Full pipeline (WOE + LR)
-  - `scorecard.csv` - Scorecard with points per WOE unit
-  - `scorecard_metadata.json` - Metadata (cutoff, gini, etc.)
-  - `threshold_analysis.csv` - Threshold optimization results
+- `scripts/local_train.py` - Train WOE + LR scorecard, find optimal cutoff
+- `src/scorecard/inference_scorecard.py` - Load model and score new applications
+- `model_output/` - Trained model artifacts (generated after training)
 
 ### Infrastructure
 - `cloudformation/infrastructure.yml` - CloudFormation template
-- `deploy_stack.py` - Deploy/delete/status commands
+- `scripts/deploy_stack.py` - Deploy/delete/status commands
 - `docker-compose.yml` - LocalStack configuration
 - `Dockerfile` - Custom SageMaker training container (Python 3.11 + dependencies)
-- `sagemaker_train.py` - SageMaker Local Mode training script
+- `scripts/sagemaker_train.py` - SageMaker Local Mode training script
 
 ### Testing
-- `send_applications.py` - Generate and send test applications
-- `check_approvals.py` - Query approved applications from DynamoDB
+- `scripts/send_applications.py` - Generate and send test applications
+- `scripts/check_approvals.py` - Query approved applications from DynamoDB
 
 ## Application Data Format
 
@@ -220,7 +252,7 @@ The Lambda package is large (~100MB zipped, ~250-300MB unzipped) due to ML depen
    - `LAMBDA_LIMITS_CODE_SIZE_ZIPPED=157286400` (150MB)
    - `LAMBDA_LIMITS_MAX_FUNCTION_PAYLOAD_SIZE_BYTES=524288000` (500MB)
 
-2. **Config file** `localstack-config.toml` (mounted to `/etc/localstack/localstack-config.toml`)
+2. **Config file** `config/localstack-config.toml` (mounted to `/etc/localstack/localstack-config.toml`)
 
 Both are needed for LocalStack to respect the increased limits.
 

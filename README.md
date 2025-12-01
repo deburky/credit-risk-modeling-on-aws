@@ -30,7 +30,32 @@ cd real_time_scoring/local && make run-workflow
 ```
 
 > [!NOTE]
-> See the [real_time_scoring/local/README.md](real_time_scoring/local/README.md) for detailed instructions.
+> See the [README.md](real_time_scoring/local/README.md) for detailed instructions.
+
+### 🚀 Batch Scoring & Credit Limit Management
+
+The `batch_scoring/` folder contains a complete implementation of a batch credit scoring and limit management system.
+
+We use CatBoost with SHAP values for model training and PostgreSQL (as a local Redshift-compatible database) for storing customer batch scores.
+
+![Image](batch_scoring/batch_scoring_diagram.png)
+
+The `batch_scoring/` folder contains a complete implementation of a batch credit scoring and limit increase system using:
+
+- **SageMaker Pipelines** for ML workflow orchestration
+- **SageMaker** for model training (CatBoost with SHAP values)
+- **PostgreSQL** for storing customer batch scores
+- **SageMaker Processing Steps** for querying, inference, evaluation, and database updates
+- **LocalStack** for local S3 storage
+
+Run the workflow using the Makefile:
+
+```bash
+cd batch_scoring/local && make run-workflow
+```
+
+> [!NOTE]
+> See the [README.md](batch_scoring/local/README.md) for detailed instructions.
 
 ## 📄 License
 
