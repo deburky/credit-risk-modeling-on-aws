@@ -55,3 +55,13 @@ tmp/
 
 # Assets (if these are generated or not needed in repo)
 assets/
+
+# MLflow on AWS (SAM)
+mlflow_on_aws/.local-testing/
+mlflow_on_aws/.aws-sam/
+mlflow_on_aws/__cf_mlflow_stack.yaml
+mlflow_on_aws/__log-mlflow-stack.txt
+mlflow_on_aws/iam-policies/*-resolved.json
+mlflow_on_aws/minio_data/
+mlflow_on_aws/postgres_data/
+# Note: samconfig.toml is kept in repo (users can customize)

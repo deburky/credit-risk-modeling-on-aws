@@ -19,4 +19,12 @@ dependencies = [
     "boto3>=1.41.5",
     "sagemaker==2.180.0",
     "setuptools>=65.0.0",
+    "mlflow>=3.6.0",
+    "sagemaker-mlflow>=0.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "jinja2>=3.1.6",
+    "python-dotenv>=1.2.1",
 ]

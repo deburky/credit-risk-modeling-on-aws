@@ -14,7 +14,27 @@ start: ## Start LocalStack
 	@echo "✓ LocalStack running at http://localhost:4566"
 
 stop: ## Stop LocalStack
-	docker-compose down
+	@if docker ps --filter "name=real-time-scoring-localstack" --format "{{.Names}}" | grep -q real-time-scoring-localstack; then \
+		docker-compose down; \
+		echo "✓ LocalStack stopped (port 4566 freed)"; \
+	else \
+		echo "⚠️  No real-time-scoring LocalStack container found."; \
+		echo "   Checking for other LocalStack instances on port 4566..."; \
+		OTHER_LS=$$(docker ps --filter "publish=4566" --format "{{.Names}}" | head -1); \
+		if [ -n "$$OTHER_LS" ]; then \
+			echo "   Found: $$OTHER_LS (from another module)"; \
+			read -p "   Stop it to free port 4566? [y/N] " -n 1 -r; \
+			echo; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				docker stop $$OTHER_LS; \
+				echo "✓ Stopped $$OTHER_LS (port 4566 freed)"; \
+			else \
+				echo "   Keeping $$OTHER_LS running"; \
+			fi; \
+		else \
+			echo "   No LocalStack instances found on port 4566"; \
+		fi; \
+	fi
 
 restart-localstack: ## Stop LocalStack, remove all data, and restart fresh
 	@echo "Stopping LocalStack..."
@@ -33,6 +53,12 @@ deploy-stack: ## Deploy CloudFormation stack
 delete-stack: ## Delete CloudFormation stack
 	uv run python scripts/deploy_stack.py delete
 	@echo "✓ Stack deletion complete"
+	@echo ""
+	@read -p "Stop LocalStack to free up port 4566? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		$(MAKE) stop; \
+	fi
 
 stack-status: ## Show stack status
 	uv run python scripts/deploy_stack.py status

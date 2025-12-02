@@ -9,8 +9,20 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 start: ## Start PostgreSQL and LocalStack
-	docker-compose up -d
+	@if docker ps --filter "publish=4566" --format "{{.Names}}" | grep -q localstack; then \
+		docker-compose up -d postgres; \
+	else \
+		docker-compose up -d; \
+	fi
 	@sleep 5
+	@echo "Services started:"
+	@docker-compose ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
+	@if docker ps --filter "publish=4566" --format "{{.Names}}" | grep -q localstack && ! docker-compose ps --services | grep -q localstack; then \
+		LS_NAME=$$(docker ps --filter "publish=4566" --format "{{.Names}}" | head -1); \
+		LS_STATUS=$$(docker ps --filter "publish=4566" --format "{{.Status}}" | head -1); \
+		echo "localstack (external)  $$LS_STATUS  0.0.0.0:4566->4566/tcp"; \
+	fi
+	@echo ""
 	@echo "✓ PostgreSQL running at localhost:5432"
 	@echo "✓ LocalStack running at http://localhost:4566"
 

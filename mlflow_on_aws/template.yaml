@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: MLflow Tracking Server infrastructure for SageMaker Studio
+
+Parameters:
+  StackCode:
+    Type: String
+    Default: 'staging'
+    Description: Stack identifying code (staging/prod)
+  
+  SageMakerExecutionRole:
+    Type: String
+    Description: Existing SageMaker Studio execution role name
+    Default: ''
+  
+  SageMakerBucket:
+    Type: String
+    Description: S3 bucket for SageMaker artifacts
+    Default: ''
+  
+  MLflowPrefix:
+    Type: String
+    Default: 'mlflow'
+    Description: S3 prefix for MLflow artifacts
+
+Conditions:
+  HasSageMakerRole: !Not [!Equals [!Ref SageMakerExecutionRole, '']]
+
+Resources:
+  # IAM ROLE FOR MLFLOW TRACKING SERVER
+  MLflowTrackingServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MLflowTrackingServerRole-${StackCode}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: MLflowS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 'arn:aws:s3:::${SageMakerBucket}'
+                  - !Sub 'arn:aws:s3:::${SageMakerBucket}/${MLflowPrefix}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: 
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/mlflow/*'
+
+  # POLICY TO ATTACH TO EXISTING SAGEMAKER ROLE
+  SageMakerMLflowPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasSageMakerRole
+    Properties:
+      PolicyName: SageMakerMLflowPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: MLflowTrackingServerPermissions
+            Effect: Allow
+            Action:
+              - sagemaker:CreateMlflowTrackingServer
+              - sagemaker:UpdateMlflowTrackingServer
+              - sagemaker:DeleteMlflowTrackingServer
+              - sagemaker:DescribeMlflowTrackingServer
+              - sagemaker:ListMlflowTrackingServers
+              - sagemaker:StartMlflowTrackingServer
+              - sagemaker:StopMlflowTrackingServer
+            Resource:
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:mlflow-tracking-server/*'
+          - Sid: SageMakerStudioPermissions
+            Effect: Allow
+            Action:
+              - sagemaker:StartSession
+              - sagemaker:CreatePresignedDomainUrl
+              - sagemaker:DescribeDomain
+              - sagemaker:DescribeUserProfile
+              - sagemaker:DescribeSpace
+              - sagemaker:ListSpaces
+            Resource:
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:domain/*'
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/*'
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:space/*'
+          - Sid: IAMListRolesPermission
+            Effect: Allow
+            Action:
+              - iam:ListRoles
+            Resource: '*'
+          - Sid: IAMPassRoleForMLflow
+            Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource: !GetAtt MLflowTrackingServerRole.Arn
+            Condition:
+              StringEquals:
+                iam:PassedToService: sagemaker.amazonaws.com
+          - Sid: S3PermissionsForMLflow
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${SageMakerBucket}'
+              - !Sub 'arn:aws:s3:::${SageMakerBucket}/${MLflowPrefix}/*'
+          - Sid: CloudWatchLogsForMLflow
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/mlflow/*'
+      Roles:
+        - !Ref SageMakerExecutionRole
+
+Outputs:
+  MLflowArtifactsBucketName:
+    Description: S3 bucket for MLflow artifacts (existing SageMaker default bucket)
+    Value: !Ref SageMakerBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-MLflowBucket'
+  
+  MLflowArtifactsPath:
+    Description: Full S3 path for MLflow artifacts
+    Value: !Sub 's3://${SageMakerBucket}/${MLflowPrefix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-MLflowPath'
+  
+  MLflowTrackingServerRoleArn:
+    Description: Role ARN for MLflow Tracking Server
+    Value: !GetAtt MLflowTrackingServerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MLflowRoleArn'
+  
+  MLflowTrackingServerRoleName:
+    Description: Role name for MLflow Tracking Server
+    Value: !Ref MLflowTrackingServerRole
+    Export:
+      Name: !Sub '${AWS::StackName}-MLflowRoleName'
+  
+  SageMakerExecutionRoleName:
+    Description: Existing SageMaker Studio execution role (updated with MLflow permissions)
+    Value: !If [HasSageMakerRole, !Ref SageMakerExecutionRole, 'Not configured']

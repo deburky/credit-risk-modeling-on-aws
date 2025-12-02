@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+WORKDIR /opt/ml/code
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Install dependencies using uv
+RUN uv pip install --system --no-cache \
+    pandas scikit-learn mlflow boto3 sagemaker-training joblib
+
+# Copy training directory (includes patch_mlflow.py)
+COPY training/ /opt/ml/code/
+
+ENV PYTHONUNBUFFERED=1

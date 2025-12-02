@@ -57,6 +57,23 @@ cd batch_scoring/local && make run-workflow
 > [!NOTE]
 > See the [README.md](batch_scoring/local/README.md) for detailed instructions.
 
+### 🔄 MLflow on AWS
+
+![Image](mlflow_on_aws/mlflow_on_aws_diagram.png)
+
+The `mlflow_on_aws/` folder contains a complete implementation of a MLflow tracking server on AWS using:
+
+- **MLflow** for model tracking
+- **PostgreSQL** for storing MLflow experiments and runs
+- **MinIO** for storing MLflow artifacts (S3-compatible)
+- **SageMaker** for model training
+
+Run the workflow using the Makefile:
+
+```bash
+cd mlflow_on_aws && make start && make deploy-stack && make train
+```
+
 ## 📄 License
 
 [LICENSE](LICENSE)
@@ -67,5 +84,6 @@ cd batch_scoring/local && make run-workflow
 * [An Unsung Hero of Amazon SageMaker: Local Mode](https://www.tecracer.com/blog/2024/06/an-unsung-hero-of-amazon-sagemaker-local-mode.html)
 * [AWS in Plain English - Develop AWS ML Workloads Locally with LocalStack and SAM](https://aws.plainenglish.io/develop-aws-ml-workloads-locally-with-localstack-and-sam-24bdc0de81aa)
 * [GitHub - aws-samples/amazon-sagemaker-local-mode](https://github.com/aws-samples/amazon-sagemaker-local-mode)
+* [Setting up a Development Machine with MLFlow and MinIO](https://blog.min.io/setting-up-a-development-machine-with-mlflow-and-minio/)
 
 

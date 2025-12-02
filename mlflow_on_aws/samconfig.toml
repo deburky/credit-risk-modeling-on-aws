@@ -1,0 +1,21 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "mlflow-stack"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_NAMED_IAM"
+confirm_changeset = false
+resolve_s3 = false
+region = "eu-west-1"
+parameter_overrides = [
+    "StackCode=staging",
+    "SageMakerExecutionRole=",
+    "SageMakerBucket=",
+    "MLflowPrefix=mlflow"
+]
