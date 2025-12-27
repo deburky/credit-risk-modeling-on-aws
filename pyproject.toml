@@ -5,12 +5,9 @@ description = "Credit Risk Modeling on AWS"
 readme = "README.md"
 requires-python = ">=3.10, <3.13"
 dependencies = [
-    "diagrams>=0.24.4",
     "requests>=2.31.0",
     "matplotlib>=3.7.0",
-    "pillow>=10.0.0",
     "numpy<2",
-    "pycairo>=1.29.0",
     "auto-uv>=0.1.2",
     "pyauto-dotenv>=0.1.0",
     "fastwoe>=0.1.4.post2",
