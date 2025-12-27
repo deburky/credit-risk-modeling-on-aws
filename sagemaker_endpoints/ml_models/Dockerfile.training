@@ -1,0 +1,40 @@
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libgomp1 curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    boto3 \
+    catboost \
+    flask \
+    joblib \
+    numpy \
+    pandas \
+    scikit-learn
+
+# Install SageMaker training libraries
+RUN pip install --no-cache-dir "sagemaker-training<5.0" "smdebug==1.0.34" "protobuf<5.0"
+
+# SageMaker environment
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=UTF-8
+ENV PATH="/usr/local/bin:/opt/ml/code:${PATH}"
+
+WORKDIR /opt/ml
+
+# Create a wrapper script that uses uv to run train.py
+# SageMaker local mode tries to execute /opt/ml/code/train (without .py extension)
+# This wrapper will be available in the image, but mounted code will override /opt/ml/code
+# So we create it at a location that won't be overridden
+RUN mkdir -p /usr/local/bin && \
+    echo '#!/bin/bash' > /usr/local/bin/train && \
+    echo 'exec uv run /opt/ml/code/train.py "$@"' >> /usr/local/bin/train && \
+    chmod +x /usr/local/bin/train

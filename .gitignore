@@ -41,6 +41,9 @@ model_output/
 *.pkl
 *.tar.gz
 
+# Lambda packages (build artifacts)
+lambda_packages/
+
 # Environment variables
 .env
 .env.local

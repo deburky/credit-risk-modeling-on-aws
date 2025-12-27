@@ -74,6 +74,39 @@ Run the workflow using the Makefile:
 cd mlflow_on_aws && make start && make deploy-stack && make train
 ```
 
+> [!NOTE]
+> See the [README.md](mlflow_on_aws/README.md) for detailed instructions.
+
+### 🧪 SageMaker Endpoints with A/B Testing
+
+![Image](sagemaker_endpoints/sagemaker_endpoints_diagram.png)
+
+The `sagemaker_endpoints/` folder contains a complete implementation of A/B testing for credit scoring using:
+
+- **SQS** for queuing loan applications
+- **A/B Processor** (Python script) for processing messages and applying A/B test logic
+- **SageMaker** for model inference via real-time endpoints
+- **DynamoDB** for storing processing results with A/B variant information
+
+The A/B testing logic applies different approval thresholds:
+- **Variant A**: Threshold 600
+- **Variant B**: Threshold 550
+
+Run the workflow using the Makefile:
+
+```bash
+cd sagemaker_endpoints && make start && make deploy-stack && make deploy-endpoint && make test-workflow
+```
+
+Check A/B test results:
+
+```bash
+make check-ab-results
+```
+
+> [!NOTE]
+> The A/B processor is implemented as a Python script for local development. In production, this would typically be an AWS Lambda function.
+
 ## 📄 License
 
 [LICENSE](LICENSE)

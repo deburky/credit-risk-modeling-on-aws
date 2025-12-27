@@ -1,0 +1,43 @@
+FROM python:3.11-slim
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    boto3 \
+    catboost \
+    joblib \
+    numpy \
+    pandas \
+    scikit-learn \
+    flask
+
+# Set working directory
+WORKDIR /opt/program
+
+# Copy inference script
+COPY ml_models/inference.py /opt/program/
+
+# Create model directory
+RUN mkdir -p /opt/ml/model
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV MODEL_DIR=/opt/ml/model
+ENV PORT=8080
+ENV PATH="/opt/program:${PATH}"
+
+# Create serve script with exec to properly handle signals
+RUN echo '#!/bin/bash' > /opt/program/serve && \
+    echo 'set -e' >> /opt/program/serve && \
+    echo 'echo "=== SageMaker Serve Script Starting ==="' >> /opt/program/serve && \
+    echo 'echo "MODEL_DIR: $MODEL_DIR"' >> /opt/program/serve && \
+    echo 'echo "Checking model directory..."' >> /opt/program/serve && \
+    echo 'ls -lah /opt/ml/model/ 2>&1 || echo "Model dir not accessible"' >> /opt/program/serve && \
+    echo 'echo "Starting inference server..."' >> /opt/program/serve && \
+    echo 'exec python -u /opt/program/inference.py 2>&1' >> /opt/program/serve && \
+    chmod +x /opt/program/serve
+
+# Expose port
+EXPOSE 8080
+
+# Use exec form to ensure proper signal handling
+ENTRYPOINT ["/opt/program/serve"]
