@@ -18,6 +18,7 @@ dependencies = [
     "setuptools>=65.0.0",
     "mlflow>=3.6.0",
     "sagemaker-mlflow>=0.2.0",
+    "prek>=0.2.25",
 ]
 
 [dependency-groups]

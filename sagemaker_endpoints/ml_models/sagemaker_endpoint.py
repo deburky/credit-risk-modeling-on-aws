@@ -24,9 +24,7 @@ S3_BUCKET = "credit-scoring-models"
 ENDPOINT_NAME = "credit-scoring-endpoint"
 
 # Dummy IAM role (required by SageMaker but not used in local mode)
-DUMMY_IAM_ROLE = (
-    "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001"
-)
+DUMMY_IAM_ROLE = "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001"
 
 # Set environment variables for ALL boto3 clients to use LocalStack
 os.environ["AWS_ACCESS_KEY_ID"] = "test"
@@ -82,12 +80,22 @@ def cleanup_existing_containers(image_name: str = "sagemaker-credit-scoring:late
 
     # Stop containers using our image
     result = subprocess.run(
-        ["docker", "ps", "-a", "--filter", f"ancestor={image_name}", "--format", "{{.ID}}"],
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"ancestor={image_name}",
+            "--format",
+            "{{.ID}}",
+        ],
         capture_output=True,
         text=True,
     )
 
-    if container_ids := [cid.strip() for cid in result.stdout.strip().split("\n") if cid.strip()]:
+    if container_ids := [
+        cid.strip() for cid in result.stdout.strip().split("\n") if cid.strip()
+    ]:
         print(f"Found {len(container_ids)} existing container(s), stopping...")
         for container_id in container_ids:
             subprocess.run(
@@ -104,7 +112,14 @@ def cleanup_existing_containers(image_name: str = "sagemaker-credit-scoring:late
 
     # Check for containers using port 8080 (SageMaker local mode default)
     result = subprocess.run(
-        ["docker", "ps", "--filter", "publish=8080", "--format", "{{.ID}} {{.Names}} {{.Ports}}"],
+        [
+            "docker",
+            "ps",
+            "--filter",
+            "publish=8080",
+            "--format",
+            "{{.ID}} {{.Names}} {{.Ports}}",
+        ],
         capture_output=True,
         text=True,
     )
@@ -141,7 +156,15 @@ def build_sagemaker_image():
 
     print(f"Building Docker image '{image_name}' using {dockerfile_path}...")
     result = subprocess.run(
-        ["docker", "build", "-t", image_name, "-f", str(dockerfile_path), str(project_root)],
+        [
+            "docker",
+            "build",
+            "-t",
+            image_name,
+            "-f",
+            str(dockerfile_path),
+            str(project_root),
+        ],
         capture_output=True,
         text=True,
     )
@@ -157,7 +180,9 @@ def build_sagemaker_image():
 
 
 def deploy_endpoint(
-    model_path: str | Path | None = None, image_uri: str | None = None, detach: bool = False
+    model_path: str | Path | None = None,
+    image_uri: str | None = None,
+    detach: bool = False,
 ):
     """Deploy SageMaker endpoint using SageMaker local mode."""
     print(f"Deploying SageMaker endpoint '{ENDPOINT_NAME}' using local mode...")
@@ -324,14 +349,16 @@ def test_endpoint(predictor=None):
             result = json.loads(response)
         else:
             result = response
-            
+
         print(f"Prediction successful: {result}")
         return result
     except Exception as e:
         print(f"Error testing endpoint: {e}")
         import traceback
+
         traceback.print_exc()
         return None
+
 
 def delete_endpoint():
     """Delete the SageMaker endpoint."""
@@ -412,7 +439,9 @@ def main():
     """Main function."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Manage SageMaker endpoint in local mode")
+    parser = argparse.ArgumentParser(
+        description="Manage SageMaker endpoint in local mode"
+    )
     parser.add_argument(
         "action",
         choices=["deploy", "test", "delete", "status"],

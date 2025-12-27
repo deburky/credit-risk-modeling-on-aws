@@ -40,7 +40,7 @@ def package_lambda():
             raise FileNotFoundError(f"Lambda function not found: {lambda_function}")
 
         shutil.copy2(lambda_function, temp_dir / "lambda_function.py")
-        print("✓ Copied lambda_function.py")
+        print("Copied lambda_function.py")
 
         # Install dependencies
         requirements = LAMBDA_DIR / "requirements.txt"
@@ -60,27 +60,27 @@ def package_lambda():
                 ],
                 check=True,
             )
-            print("✓ Dependencies installed")
+            print("Dependencies installed")
         else:
-            print("⚠ No requirements.txt found, skipping dependencies")
+            print("No requirements.txt found, skipping dependencies")
 
         # Create zip file
         print(f"Creating zip package: {package_path}")
         shutil.make_archive(str(package_path.with_suffix("")), "zip", temp_dir)
-        print(f"✓ Package created: {package_path}")
-        print(f"  Size: {package_path.stat().st_size / 1024:.1f} KB")
+        print(f"Package created: {package_path}")
+        print(f"Size: {package_path.stat().st_size / 1024:.1f} KB")
 
     finally:
         # Cleanup temp directory
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
-            print("✓ Cleaned up temporary files")
+            print("Cleaned up temporary files")
 
 
 if __name__ == "__main__":
     try:
         package_lambda()
-        print("\n✓ Lambda packaging complete!")
+        print("Lambda packaging complete")
     except Exception as e:
-        print(f"\n✗ Error packaging Lambda: {e}")
+        print(f"Error packaging Lambda: {e}")
         sys.exit(1)

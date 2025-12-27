@@ -21,9 +21,7 @@ logger = logging.getLogger(__name__)
 ENDPOINT_URL = "http://localhost:4566"
 S3_BUCKET = "credit-scoring-models"
 REGION = "us-east-1"
-DUMMY_IAM_ROLE = (
-    "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001"
-)
+DUMMY_IAM_ROLE = "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001"
 
 # Configure boto3 to use LocalStack
 boto_config = Config(
@@ -33,7 +31,9 @@ boto_config = Config(
 
 def setup_s3_bucket():
     """Create S3 bucket in LocalStack if it doesn't exist"""
-    s3 = boto3.client("s3", endpoint_url=ENDPOINT_URL, region_name=REGION, config=boto_config)
+    s3 = boto3.client(
+        "s3", endpoint_url=ENDPOINT_URL, region_name=REGION, config=boto_config
+    )
 
     try:
         s3.head_bucket(Bucket=S3_BUCKET)
@@ -103,7 +103,9 @@ def train_with_sagemaker():
     image_name = build_docker_image("catboost-sagemaker:latest")
 
     # Determine if we need dummy data
-    use_dummy_data = not (train_data_local and data_dir.exists() and any(data_dir.glob("*.csv")))
+    use_dummy_data = not (
+        train_data_local and data_dir.exists() and any(data_dir.glob("*.csv"))
+    )
 
     # Set hyperparameters (SageMaker requires all values as strings)
 
@@ -174,7 +176,9 @@ def upload_model_to_s3(s3_client):
     metadata_path = model_dir / "model_metadata.json"
 
     if not model_path.exists() or not metadata_path.exists():
-        logger.warning("Model files not found locally. SageMaker may have saved directly to S3.")
+        logger.warning(
+            "Model files not found locally. SageMaker may have saved directly to S3."
+        )
         return
 
     # Create model.tar.gz

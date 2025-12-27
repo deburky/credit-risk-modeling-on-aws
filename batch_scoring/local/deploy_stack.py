@@ -176,5 +176,3 @@ if __name__ == "__main__":
         deploy_stack()
 
     logger.info("=" * 80)
-
-

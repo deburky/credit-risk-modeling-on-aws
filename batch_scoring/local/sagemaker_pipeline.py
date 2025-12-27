@@ -70,10 +70,10 @@ def create_processor(image_uri="python:3.11-slim", base_job_name="credit-scoring
 def create_training_step():
     """Step 0: Train CatBoost model"""
     data_dir = str(Path(__file__).parent.parent / "data")
-    
+
     # Build Docker image name (assumes it's already built)
     image_name = "catboost-sagemaker:latest"
-    
+
     # Create estimator
     estimator = Estimator(
         image_uri=image_name,
@@ -92,7 +92,7 @@ def create_training_step():
         },
         entry_point="training/train.py",
     )
-    
+
     # Create training step
     return TrainingStep(
         name="TrainCatBoostModel",

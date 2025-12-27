@@ -2,19 +2,27 @@
 Generate score distribution plot for the technical document
 """
 
+import importlib.util
 import json
+from pathlib import Path
 
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
 
+# Dynamically import to avoid E402
+local_train_path = Path(__file__).parent / "local_train.py"
+spec = importlib.util.spec_from_file_location("local_train", local_train_path)
+local_train = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(local_train)
+load_data = local_train.load_data
+
 # Set font
 rcParams["font.family"] = "Avenir"
 
 # Load trained model results
-from pathlib import Path
-
 base_dir = Path(__file__).parent.parent
 model_output_dir = base_dir / "model_output"
 
@@ -23,15 +31,6 @@ with open(model_output_dir / "scorecard_metadata.json", "r") as f:
 
 # Load threshold analysis
 threshold_df = pd.read_csv(model_output_dir / "threshold_analysis.csv")
-
-import sys
-from pathlib import Path
-
-# For visualization, we'll load the training data and recalculate scores
-import joblib
-
-sys.path.insert(0, str(Path(__file__).parent))
-from local_train import load_data
 
 df = load_data()
 X = df.drop("Good_Bad", axis=1)
@@ -119,12 +118,6 @@ plt.savefig(
     dpi=300,
     bbox_inches="tight",
     facecolor="none",
-    transparent=True,
-)
-print("✓ Score distribution plot saved to: ../score_distribution.png")
-    transparent=True,
-)
-print("✓ Score distribution plot saved to: ../score_distribution.png")
     transparent=True,
 )
 print("✓ Score distribution plot saved to: ../score_distribution.png")

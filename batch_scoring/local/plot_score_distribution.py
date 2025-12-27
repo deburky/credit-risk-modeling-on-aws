@@ -5,12 +5,13 @@ Uses CatBoost model with SHAP values converted via PDO method
 
 import json
 
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib import rcParams
-import joblib
 from catboost import Pool
+from matplotlib import rcParams
+from train_catboost import load_data
 
 # Set font
 rcParams["font.family"] = "Avenir"
@@ -21,7 +22,6 @@ with open("model_output/model_metadata.json", "r") as f:
     metadata = json.load(f)
 
 # Load data
-from train_catboost import load_data
 
 df = load_data()
 X = df.drop("Good_Bad", axis=1)
@@ -31,7 +31,7 @@ y = 1 - df["Good_Bad"]  # Reverse: 0=good, 1=bad
 pool = Pool(X, y)
 
 # Get SHAP values
-shap_values = model.get_feature_importance(type='ShapValues', data=pool)
+shap_values = model.get_feature_importance(type="ShapValues", data=pool)
 
 # Extract feature contributions and base value
 feature_shap = shap_values[:, :-1]  # Feature contributions
@@ -117,5 +117,3 @@ plt.savefig(
     transparent=True,
 )
 print("✓ Score distribution plot saved to: ../score_distribution.png")
-
-

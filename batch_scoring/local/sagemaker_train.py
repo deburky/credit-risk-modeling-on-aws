@@ -235,4 +235,3 @@ def download_model_from_s3(s3_client):
 
 if __name__ == "__main__":
     estimator = train_with_sagemaker_local()
-

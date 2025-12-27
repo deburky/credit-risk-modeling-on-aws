@@ -46,7 +46,7 @@ def parse_args():
 def load_model(model_dir):
     """Load CatBoost model and metadata"""
     import tarfile
-    
+
     # Check if model is in a tar.gz file (from SageMaker training)
     tar_files = [f for f in os.listdir(model_dir) if f.endswith(".tar.gz")]
     if tar_files:
@@ -55,8 +55,8 @@ def load_model(model_dir):
         print(f"Extracting model from {tar_path}...")
         with tarfile.open(tar_path, "r:gz") as tar:
             tar.extractall(path=model_dir)
-        print(f"✓ Model extracted")
-    
+        print("✓ Model extracted")
+
     model_path = os.path.join(model_dir, "catboost_model.joblib")
     metadata_path = os.path.join(model_dir, "model_metadata.json")
 

@@ -56,7 +56,7 @@ def check_model_in_s3():
         # Check if bucket exists
         try:
             s3.head_bucket(Bucket=bucket)
-        except:
+        except Exception:
             print(f"✗ S3 bucket '{bucket}' does not exist")
             return False
 
