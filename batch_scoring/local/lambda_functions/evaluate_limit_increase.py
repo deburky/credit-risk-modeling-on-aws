@@ -36,7 +36,7 @@ def lambda_handler(event, context):
                 new_limit = min(new_limit, 20000)  # Cap at 20000
 
                 decision = "APPROVED"
-                reason = f"Score {new_score:.0f} >= 650, increase by {increase_percent*100:.0f}%"
+                reason = f"Score {new_score:.0f} >= 650, increase by {increase_percent * 100:.0f}%"
             else:
                 # Not eligible
                 new_limit = current_limit

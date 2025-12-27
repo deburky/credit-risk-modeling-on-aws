@@ -100,7 +100,7 @@ def send_applications(num_applications=30):
             )
 
             logger.info(
-                f"Application #{i+1:3d} sent - {profile.upper():6s} risk - {expected}"
+                f"Application #{i + 1:3d} sent - {profile.upper():6s} risk - {expected}"
             )
 
             # Small delay to simulate real-time

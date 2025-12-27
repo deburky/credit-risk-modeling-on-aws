@@ -1,6 +1,7 @@
 """
 Check limit increase results from PostgreSQL
 """
+
 import psycopg2
 import sys
 import os

@@ -2,6 +2,7 @@
 Test EventBridge scheduled rule (simulate scheduled execution)
 For LocalStack, we can manually trigger the rule to test it
 """
+
 import boto3
 import json
 import sys

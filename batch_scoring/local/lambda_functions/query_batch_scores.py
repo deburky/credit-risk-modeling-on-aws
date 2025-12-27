@@ -1,6 +1,7 @@
 """
 Lambda function to query PostgreSQL for batch of customers eligible for limit increase evaluation
 """
+
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
