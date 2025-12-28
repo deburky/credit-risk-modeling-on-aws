@@ -1,5 +1,7 @@
 # 📚 Credit Risk Modeling on AWS ☁️
 
+![Image](media/title.png)
+
 This repository contains code examples and implementations from the **Credit Risk Modeling on AWS** book project.
 
 Author: [Denis Burakov](https://github.com/deburky)
