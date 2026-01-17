@@ -1,0 +1,134 @@
+{
+    "Comment": "An example of using SageMaker to preprocess data and train a machine learning model.",
+    "StartAt": "Generate dataset",
+    "QueryLanguage": "JSONata",
+    "States": {
+        "Generate dataset": {
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+                "FunctionName": "MyLambdaFunction"
+            },
+            "Output": "{% $states.result.Payload %}",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Type": "Task",
+            "Next": "Standardization: x' = (x - x̅) / σ"
+        },
+        "Standardization: x' = (x - x̅) / σ": {
+            "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+            "Arguments": {
+                "ProcessingResources": {
+                    "ClusterConfig": {
+                        "InstanceCount": 1,
+                        "InstanceType": "local",
+                        "VolumeSizeInGB": 10
+                    }
+                },
+                "ProcessingInputs": [
+                    {
+                        "InputName": "input-1",
+                        "S3Input": {
+                            "S3Uri": "s3://credit-scoring-models/input/raw.csv",
+                            "LocalPath": "/opt/ml/processing/input",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    },
+                    {
+                        "InputName": "code",
+                        "S3Input": {
+                            "S3Uri": "s3://credit-scoring-models/code/transform.py",
+                            "LocalPath": "/opt/ml/processing/input/code",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    }
+                ],
+                "ProcessingOutputConfig": {
+                    "Outputs": [
+                        {
+                            "OutputName": "train_data",
+                            "S3Output": {
+                                "S3Uri": "s3://credit-scoring-models/train",
+                                "LocalPath": "/opt/ml/processing/output/train",
+                                "S3UploadMode": "EndOfJob"
+                            }
+                        }
+                    ]
+                },
+                "AppSpecification": {
+                    "ImageUri": "python:3.11-slim",
+                    "ContainerEntrypoint": [
+                        "python3",
+                        "/opt/ml/processing/input/code/transform.py"
+                    ]
+                },
+                "StoppingCondition": {
+                    "MaxRuntimeInSeconds": 300
+                },
+                "RoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                "ProcessingJobName": "{% $states.context.Execution.Name %}"
+            },
+            "Type": "Task",
+            "Next": "Train model (XGBoost)"
+        },
+        "Train model (XGBoost)": {
+            "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+            "Arguments": {
+                "AlgorithmSpecification": {
+                    "TrainingImage": "xgboost-training:latest",
+                    "TrainingInputMode": "File"
+                },
+                "OutputDataConfig": {
+                    "S3OutputPath": "s3://credit-scoring-models/models"
+                },
+                "StoppingCondition": {
+                    "MaxRuntimeInSeconds": 86400
+                },
+                "ResourceConfig": {
+                    "InstanceCount": 1,
+                    "InstanceType": "local",
+                    "VolumeSizeInGB": 30
+                },
+                "RoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                "InputDataConfig": [
+                    {
+                        "DataSource": {
+                            "S3DataSource": {
+                                "S3DataDistributionType": "ShardedByS3Key",
+                                "S3DataType": "S3Prefix",
+                                "S3Uri": "s3://credit-scoring-models/train"
+                            }
+                        },
+                        "ChannelName": "train",
+                        "ContentType": "text/csv"
+                    }
+                ],
+                "HyperParameters": {
+                    "objective": "reg:logistic",
+                    "eval_metric": "rmse",
+                    "num_round": "5"
+                },
+                "TrainingJobName": "{% $states.context.Execution.Name %}"
+            },
+            "Type": "Task",
+            "End": true
+        }
+    }
+}

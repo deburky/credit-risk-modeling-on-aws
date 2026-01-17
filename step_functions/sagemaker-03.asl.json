@@ -1,0 +1,167 @@
+{
+    "Comment": "An example of using SageMaker to tune a machine learning model.",
+    "StartAt": "Generate Training Dataset",
+    "QueryLanguage": "JSONata",
+    "States": {
+        "Generate Training Dataset": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Output": "{% $states.result.Payload %}",
+            "Arguments": {
+                "FunctionName": "MyLambdaFunction"
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Next": "HyperparameterTuning (XGBoost)"
+        },
+        "HyperparameterTuning (XGBoost)": {
+            "Resource": "arn:aws:states:::sagemaker:createHyperParameterTuningJob.sync",
+            "Type": "Task",
+            "Next": "HyperparameterTuning - Save Model",
+            "Arguments": {
+                "HyperParameterTuningJobName": "{% $states.context.Execution.Name %}",
+                "HyperParameterTuningJobConfig": {
+                    "Strategy": "Bayesian",
+                    "HyperParameterTuningJobObjective": {
+                        "Type": "Minimize",
+                        "MetricName": "validation:rmse"
+                    },
+                    "ResourceLimits": {
+                        "MaxNumberOfTrainingJobs": 2,
+                        "MaxParallelTrainingJobs": 2
+                    },
+                    "ParameterRanges": {
+                        "ContinuousParameterRanges": [
+                            {
+                                "Name": "alpha",
+                                "MinValue": "0",
+                                "MaxValue": "1000",
+                                "ScalingType": "Auto"
+                            },
+                            {
+                                "Name": "gamma",
+                                "MinValue": "0",
+                                "MaxValue": "5",
+                                "ScalingType": "Auto"
+                            }
+                        ],
+                        "IntegerParameterRanges": [
+                            {
+                                "Name": "max_delta_step",
+                                "MinValue": "0",
+                                "MaxValue": "10",
+                                "ScalingType": "Auto"
+                            },
+                            {
+                                "Name": "max_depth",
+                                "MinValue": "0",
+                                "MaxValue": "10",
+                                "ScalingType": "Auto"
+                            }
+                        ]
+                    }
+                },
+                "TrainingJobDefinition": {
+                    "AlgorithmSpecification": {
+                        "TrainingImage": "xgboost-training:latest",
+                        "TrainingInputMode": "File"
+                    },
+                    "OutputDataConfig": {
+                        "S3OutputPath": "s3://credit-scoring-models/models"
+                    },
+                    "StoppingCondition": {
+                        "MaxRuntimeInSeconds": 86400
+                    },
+                    "ResourceConfig": {
+                        "InstanceCount": 1,
+                        "InstanceType": "local",
+                        "VolumeSizeInGB": 30
+                    },
+                    "RoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                    "InputDataConfig": [
+                        {
+                            "DataSource": {
+                                "S3DataSource": {
+                                    "S3DataDistributionType": "FullyReplicated",
+                                    "S3DataType": "S3Prefix",
+                                    "S3Uri": "s3://credit-scoring-models/csv/train.csv"
+                                }
+                            },
+                            "ChannelName": "train",
+                            "ContentType": "text/csv"
+                        },
+                        {
+                            "DataSource": {
+                                "S3DataSource": {
+                                    "S3DataDistributionType": "FullyReplicated",
+                                    "S3DataType": "S3Prefix",
+                                    "S3Uri": "s3://credit-scoring-models/csv/validation.csv"
+                                }
+                            },
+                            "ChannelName": "validation",
+                            "ContentType": "text/csv"
+                        }
+                    ],
+                    "StaticHyperParameters": {
+                        "precision_dtype": "float32",
+                        "num_round": "2"
+                    }
+                }
+            },
+            "Output": "{% $merge([$states.input, {'bestTrainingJobName': $states.result.BestTrainingJob.TrainingJobName, 'modelDataUrl': $states.result.TrainingJobDefinition.OutputDataConfig.S3OutputPath & '/' & $states.result.BestTrainingJob.TrainingJobName & '/output/model.tar.gz'}]) %}"
+        },
+        "HyperparameterTuning - Save Model": {
+            "Resource": "arn:aws:states:::sagemaker:createModel",
+            "Type": "Task",
+            "Next": "Batch transform",
+            "Arguments": {
+                "PrimaryContainer": {
+                    "Image": "xgboost-training:latest",
+                    "Environment": {},
+                    "ModelDataUrl": "{% $states.input.modelDataUrl %}"
+                },
+                "ExecutionRoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                "ModelName": "{% $states.input.bestTrainingJobName %}"
+            },
+            "Output": "{% $merge([$states.input, {'jobName': $split($states.result.ModelArn, '/')[-1]}]) %}"
+        },
+        "Batch transform": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sagemaker:createTransformJob.sync",
+            "End": true,
+            "Arguments": {
+                "ModelName": "{% $states.input.jobName %}",
+                "TransformInput": {
+                    "CompressionType": "None",
+                    "ContentType": "text/csv",
+                    "DataSource": {
+                        "S3DataSource": {
+                            "S3DataType": "S3Prefix",
+                            "S3Uri": "s3://credit-scoring-models/csv/test.csv"
+                        }
+                    }
+                },
+                "TransformOutput": {
+                    "S3OutputPath": "s3://credit-scoring-models/output"
+                },
+                "TransformResources": {
+                    "InstanceCount": 1,
+                    "InstanceType": "local"
+                },
+                "TransformJobName": "{% $states.context.Execution.Name %}"
+            }
+        }
+    }
+}

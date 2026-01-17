@@ -1,0 +1,114 @@
+{
+    "Comment": "An example of using SageMaker to train a machine learning model.",
+    "StartAt": "Generate dataset",
+    "QueryLanguage": "JSONata",
+    "States": {
+        "Generate dataset": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Output": "{% $states.result.Payload %}",
+            "Arguments": {
+                "FunctionName": "MyLambdaFunction"
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Next": "Train model (XGBoost)"
+        },
+        "Train model (XGBoost)": {
+            "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+            "Arguments": {
+                "AlgorithmSpecification": {
+                    "TrainingImage": "xgboost-training:latest",
+                    "TrainingInputMode": "File"
+                },
+                "OutputDataConfig": {
+                    "S3OutputPath": "s3://credit-scoring-models/models"
+                },
+                "StoppingCondition": {
+                    "MaxRuntimeInSeconds": 86400
+                },
+                "ResourceConfig": {
+                    "InstanceCount": 1,
+                    "InstanceType": "local",
+                    "VolumeSizeInGB": 30
+                },
+                "RoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                "InputDataConfig": [
+                    {
+                        "DataSource": {
+                            "S3DataSource": {
+                                "S3DataDistributionType": "ShardedByS3Key",
+                                "S3DataType": "S3Prefix",
+                                "S3Uri": "s3://credit-scoring-models/csv/train.csv"
+                            }
+                        },
+                        "ChannelName": "train",
+                        "ContentType": "text/csv"
+                    }
+                ],
+                "HyperParameters": {
+                    "objective": "reg:logistic",
+                    "eval_metric": "rmse",
+                    "num_round": "5"
+                },
+                "TrainingJobName": "{% $states.context.Execution.Name %}"
+            },
+            "Type": "Task",
+            "Output": "{% $merge([$states.input, $states.result]) %}",
+            "Next": "Save Model"
+        },
+        "Save Model": {
+            "Arguments": {
+                "PrimaryContainer": {
+                    "Image": "xgboost-training:latest",
+                    "Environment": {},
+                    "ModelDataUrl": "{% $states.input.ModelArtifacts.S3ModelArtifacts %}"
+                },
+                "ExecutionRoleArn": "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001",
+                "ModelName": "{% $states.input.TrainingJobName %}"
+            },
+            "Resource": "arn:aws:states:::sagemaker:createModel",
+            "Type": "Task",
+            "Output": "{% $merge([$states.input, $states.result]) %}",
+            "Next": "Batch transform"
+        },
+        "Batch transform": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sagemaker:createTransformJob.sync",
+            "Arguments": {
+                "ModelName": "{% $states.input.ModelName %}",
+                "TransformInput": {
+                    "CompressionType": "None",
+                    "ContentType": "text/csv",
+                    "DataSource": {
+                        "S3DataSource": {
+                            "S3DataType": "S3Prefix",
+                            "S3Uri": "s3://credit-scoring-models/csv/test.csv"
+                        }
+                    }
+                },
+                "TransformOutput": {
+                    "S3OutputPath": "s3://credit-scoring-models/output"
+                },
+                "TransformResources": {
+                    "InstanceCount": 1,
+                    "InstanceType": "local"
+                },
+                "TransformJobName": "{% $states.context.Execution.Name %}"
+            },
+            "End": true
+        }
+    }
+}

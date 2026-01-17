@@ -1,0 +1,98 @@
+---
+description: Rules for writing and maintaining Makefiles with proper formatting and validation
+globs:
+  - "**/Makefile"
+  - "**/*.mk"
+alwaysApply: true
+---
+
+## Makefile Quality and Validation Tools
+
+### Syntax Validation with mbake
+
+- After finalizing Makefile edits, validate syntax with `mbake`:
+```bash
+  # Validate Makefile using uvx (recommended)
+  uvx mbake format Makefile
+  uvx mbake validate Makefile
+  
+  # Or using pipx
+  pipx run mbake format Makefile
+  pipx run mbake validate Makefile
+  
+  # Validate all Makefiles in project
+  uvx mbake format **/Makefile
+  uvx mbake validate **/Makefile
+```
+- `mbake format` formats the Makefile according to the rules
+- `mbake validate` catches syntax errors, invalid target names, and common mistakes
+- Run before committing to ensure Makefile is valid
+- Fix all validation errors - don't ignore warnings
+
+### Makefile Best Practices
+
+- Use tabs (not spaces) for recipe indentation - this is a hard requirement
+- Declare `.PHONY` targets at the top for non-file targets
+- Use meaningful target names that describe the action
+- Add help target with `##` comments for documentation
+- Use variables for repeated values (e.g., `PYTHON := python3`)
+- Keep recipes concise and focused on a single task
+
+### Target Documentation
+```makefile
+.PHONY: help
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+.PHONY: test
+test: ## Run tests
+	pytest tests/
+
+.PHONY: lint
+lint: ## Run linters
+	ruff check .
+	mypy .
+```
+
+## Output Formatting
+
+### Recommended Patterns
+
+- Use plain text status indicators: "Success", "Error", "Running", "Complete"
+- Use simple symbols: ✓ (checkmark), ✗ (cross), → (arrow)
+- Colors are acceptable via ANSI codes for important messages
+- Keep output concise and actionable
+
+### Example Output Style
+```makefile
+.PHONY: build
+build: ## Build the project
+	@echo "→ Building project..."
+	@uv build
+	@echo "✓ Build complete"
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	@echo "→ Cleaning build artifacts..."
+	@rm -rf dist/ build/
+	@echo "✓ Clean complete"
+```
+
+### Prohibited Patterns
+
+- Excessive decorative lines with repeated characters
+- Unnecessary blank lines between status messages
+- Over-use of emojis (✓ and ✗ are sufficient)
+- Verbose multi-line explanations in output
+
+## Validation Workflow
+
+1. Edit Makefile
+2. Run `uvx mbake validate Makefile` to check syntax
+3. Test targets manually: `make <target>`
+4. Commit only if validation passes and targets work
+
+### Rationale
+
+Clean, validated Makefiles that are easy to maintain and use across the team.

@@ -1,0 +1,50 @@
+{
+    "Comment": "An example of using Bedrock to chain prompts and their responses together.",
+    "StartAt": "Initialize",
+    "QueryLanguage": "JSONata",
+    "States": {
+        "Initialize": {
+            "Type": "Pass",
+            "Next": "Choice",
+            "Assign": {
+                "counter": "{% $count($states.input.prompts) %}",
+                "conversation_history": [
+                    ""
+                ],
+                "input_prompts": "{% $reverse($states.input.prompts) %}"
+            }
+        },
+        "Choice": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Next": "Invoke model with prompt",
+                    "Condition": "{% $counter > 0 %}"
+                }
+            ],
+            "Default": "Success"
+        },
+        "Success": {
+            "Type": "Succeed",
+            "Output": "{% $join($conversation_history[[1..$count($conversation_history)]], '.') %}"
+        },
+        "Invoke model with prompt": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::bedrock:invokeModel",
+            "Arguments": {
+                "ModelId": "cohere.command-text-v14",
+                "Body": {
+                    "prompt": "{% $conversation_history[-1] & '.' & $input_prompts[$counter - 1] %}",
+                    "max_tokens": 250
+                },
+                "ContentType": "application/json",
+                "Accept": "*/*"
+            },
+            "Assign": {
+                "conversation_history": "{% $append($conversation_history, $states.result.Body.generations[0].text) %}",
+                "counter": "{% $counter - 1 %}"
+            },
+            "Next": "Choice"
+        }
+    }
+}

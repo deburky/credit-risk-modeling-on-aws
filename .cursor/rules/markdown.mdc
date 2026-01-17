@@ -1,0 +1,101 @@
+---
+description: Rules for writing Markdown documentation
+globs:
+  - "**/*.md"
+  - "**/*.markdown"
+alwaysApply: true
+---
+
+## Markdown Formatting
+
+## Diagrams Over Lists
+
+- Use Mermaid diagrams for workflows with >5 steps or complex architectures
+- [GitHub Mermaid Docs](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams)
+
+````mermaid
+graph LR
+    Train --> Package --> Upload --> Deploy --> Test
+````
+
+- Keep simple lists for 2-4 items only
+
+## Mathematical Expressions
+
+### Use LaTeX for Formulas
+
+- Use inline math with `$...$` and display math with `$$...$$`
+- GitHub natively renders LaTeX mathematical expressions
+- See: [GitHub Math Documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions)
+
+````markdown
+# Inline math
+The Gini coefficient is calculated as $G = 2 \cdot AUC - 1$
+
+# Display math (centered block)
+$$
+\text{Gini} = 2 \int_0^1 (ROC(t) - t) \, dt
+$$
+
+# Multiple equations
+$$
+\begin{align}
+\text{Precision} &= \frac{TP}{TP + FP} \\
+\text{Recall} &= \frac{TP}{TP + FN}
+\end{align}
+$$
+````
+
+### Common Use Cases
+
+**Model Metrics**
+````markdown
+$$
+F_1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}
+$$
+````
+
+**Loss Functions**
+````markdown
+$$
+L(\theta) = -\frac{1}{N} \sum_{i=1}^{N} [y_i \log(p_i) + (1-y_i) \log(1-p_i)]
+$$
+````
+
+**Statistical Tests**
+````markdown
+The KS statistic is defined as $KS = \max_t |F_1(t) - F_0(t)|$
+````
+
+### When to Use Math
+
+- Documenting model formulas and metrics
+- Explaining statistical methods
+- Loss functions and optimization
+- Credit scoring formulas (e.g., odds ratio, log-odds)
+- Keep simple ratios as text: "precision = TP / (TP + FP)" for casual references
+
+### Lists and Line Breaks
+
+- Always add a blank line before lists (ordered or unordered)
+- Lists must be separated from preceding text by a blank line
+
+```markdown
+# Good: Blank line before list
+Reference Documentation:
+
+- [LocalStack Lambda ECR Tutorial](https://example.com)
+- [Detailed Fix Documentation](path/to/doc.md)
+
+# Bad: No blank line before list
+Reference Documentation:
+- [LocalStack Lambda ECR Tutorial](https://example.com)
+- [Detailed Fix Documentation](path/to/doc.md)
+```
+
+### Other Formatting Rules
+
+- Use `**bold**` for emphasis, not `__bold__`
+- Use `*italic*` for emphasis, not `_italic_`
+- Add blank line before and after code blocks
+- Add blank line before and after headers (except at document start)
