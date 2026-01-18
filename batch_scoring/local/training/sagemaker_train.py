@@ -1,10 +1,9 @@
-"""
-Train CatBoost model using SageMaker Local Mode
-Stores model in LocalStack S3
+"""Train CatBoost model using SageMaker Local Mode.
+
+Stores model in LocalStack S3.
 """
 
 import logging
-import os
 import subprocess
 from pathlib import Path
 
@@ -29,24 +28,24 @@ boto_config = Config(
 
 
 def setup_s3_bucket():
-    """Create S3 bucket in LocalStack if it doesn't exist"""
+    """Create S3 bucket in LocalStack if it doesn't exist."""
     s3 = boto3.client(
         "s3", endpoint_url=ENDPOINT_URL, region_name=REGION, config=boto_config
     )
 
     try:
         s3.head_bucket(Bucket=S3_BUCKET)
-        logger.info(f"✓ S3 bucket '{S3_BUCKET}' already exists")
+        logger.info(f"S3 bucket '{S3_BUCKET}' already exists")
     except s3.exceptions.ClientError:
         logger.info(f"Creating S3 bucket '{S3_BUCKET}'...")
         s3.create_bucket(Bucket=S3_BUCKET)
-        logger.info(f"✓ Created S3 bucket '{S3_BUCKET}'")
+        logger.info(f"Created S3 bucket '{S3_BUCKET}'")
 
     return s3
 
 
 def build_docker_image(image_name="catboost-sagemaker:latest"):
-    """Build custom Docker image for SageMaker training"""
+    """Build custom Docker image for SageMaker training."""
     dockerfile_path = Path(__file__).parent / "Dockerfile"
 
     if not dockerfile_path.exists():
@@ -61,19 +60,19 @@ def build_docker_image(image_name="catboost-sagemaker:latest"):
     )
 
     if result.stdout.strip():
-        logger.info(f"✓ Docker image '{image_name}' already exists, skipping build")
+        logger.info(f"Docker image '{image_name}' already exists, skipping build")
         return image_name
 
-    # Build the image
-    build_cmd = [
-        "docker",
-        "build",
-        "-t",
-        image_name,
-        "-f",
-        str(dockerfile_path),
-        str(dockerfile_path.parent),
-    ]
+        # Build the image (context is parent directory to access data/)
+        build_cmd = [
+            "docker",
+            "build",
+            "-t",
+            image_name,
+            "-f",
+            str(dockerfile_path),
+            str(dockerfile_path.parent.parent),
+        ]
 
     logger.info(f"Running: {' '.join(build_cmd)}")
     result = subprocess.run(build_cmd, capture_output=True, text=True)
@@ -82,13 +81,12 @@ def build_docker_image(image_name="catboost-sagemaker:latest"):
         logger.error(f"Docker build failed:\n{result.stderr}")
         raise RuntimeError(f"Failed to build Docker image: {result.stderr}")
 
-    logger.info(f"✓ Successfully built Docker image: {image_name}")
+    logger.info(f"Successfully built Docker image: {image_name}")
     return image_name
 
 
 def train_with_sagemaker_local():
-    """Train CatBoost model using SageMaker Local Mode and save to S3"""
-
+    """Train CatBoost model using SageMaker Local Mode and save to S3."""
     logger.info("Training CatBoost Credit Scoring Model with SageMaker Local Mode")
 
     # Setup S3
@@ -103,9 +101,7 @@ def train_with_sagemaker_local():
     sagemaker_session.config = {"local": {"local_code": True}}
 
     # Use local file paths for training
-    from pathlib import Path
-
-    base_dir = Path(__file__).parent
+    base_dir = Path(__file__).parent.parent
     data_dir = base_dir.parent / "data"
     train_data_local = f"file://{data_dir}"
     output_path_local = f"file://{base_dir / 'model_output'}"
@@ -129,7 +125,7 @@ def train_with_sagemaker_local():
             "target-odds": 30,
             "pts-double-odds": 20,
         },
-        entry_point="training/train.py",
+        entry_point="train.py",
     )
 
     logger.info("\nStarting SageMaker Local training...")
@@ -139,15 +135,13 @@ def train_with_sagemaker_local():
     # Train using local file paths
     catboost_estimator.fit({"train": train_data_local})
 
-    logger.info("\n" + "=" * 80)
-    logger.info("✓ Training complete!")
+    logger.info("Training complete")
     logger.info(f"Model artifacts saved locally to: {output_path_local}")
-    logger.info("=" * 80)
 
     # Upload model to LocalStack S3
     logger.info("\nUploading model to LocalStack S3...")
     upload_model_to_s3(s3_client)
-    logger.info(f"✓ Model uploaded to s3://{S3_BUCKET}/models/catboost_model.tar.gz")
+    logger.info(f"Model uploaded to s3://{S3_BUCKET}/models/catboost_model.tar.gz")
 
     # Download model artifacts locally for reference
     logger.info("\nDownloading model artifacts locally for reference...")
@@ -157,20 +151,20 @@ def train_with_sagemaker_local():
 
 
 def upload_model_to_s3(s3_client):
-    """Upload model artifacts from local model_output to S3"""
+    """Upload model artifacts from local model_output to S3."""
     import tarfile
     from io import BytesIO
 
-    model_dir = "model_output"
-    if not os.path.exists(model_dir):
+    model_dir = Path(__file__).parent.parent / "model_output"
+    if not model_dir.exists():
         logger.warning(f"Model directory not found: {model_dir}")
         return
 
     # Check if we have the model files
-    model_path = os.path.join(model_dir, "catboost_model.joblib")
-    metadata_path = os.path.join(model_dir, "model_metadata.json")
+    model_path = model_dir / "catboost_model.joblib"
+    metadata_path = model_dir / "model_metadata.json"
 
-    if not os.path.exists(model_path) or not os.path.exists(metadata_path):
+    if not model_path.exists() or not metadata_path.exists():
         logger.warning(
             "Model files not found locally. SageMaker may have saved directly to S3."
         )
@@ -179,8 +173,8 @@ def upload_model_to_s3(s3_client):
     # Create model.tar.gz
     tar_buffer = BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
-        tar.add(model_path, arcname="catboost_model.joblib")
-        tar.add(metadata_path, arcname="model_metadata.json")
+        tar.add(str(model_path), arcname="catboost_model.joblib")
+        tar.add(str(metadata_path), arcname="model_metadata.json")
 
     tar_buffer.seek(0)
 
@@ -188,11 +182,11 @@ def upload_model_to_s3(s3_client):
     s3_key = "models/catboost_model.tar.gz"
     logger.info(f"Uploading model to s3://{S3_BUCKET}/{s3_key}...")
     s3_client.upload_fileobj(tar_buffer, S3_BUCKET, s3_key)
-    logger.info("✓ Model uploaded to S3")
+    logger.info("Model uploaded to S3")
 
 
 def download_model_from_s3(s3_client):
-    """Download model artifacts from S3 to local model_output directory"""
+    """Download model artifacts from S3 to local model_output directory."""
     import tarfile
     from io import BytesIO
 
@@ -222,11 +216,12 @@ def download_model_from_s3(s3_client):
         tar_data = obj["Body"].read()
 
         # Extract to local model_output directory
-        os.makedirs("model_output", exist_ok=True)
+        model_dir = Path(__file__).parent.parent / "model_output"
+        model_dir.mkdir(exist_ok=True)
         with tarfile.open(fileobj=BytesIO(tar_data), mode="r:gz") as tar:
-            tar.extractall("model_output")
+            tar.extractall(model_dir)
 
-        logger.info("✓ Model artifacts downloaded to model_output/")
+        logger.info("Model artifacts downloaded to model_output/")
 
     except Exception as e:
         logger.warning(f"Could not download model from S3: {e}")

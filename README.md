@@ -44,11 +44,16 @@ We use CatBoost with SHAP values for model training and PostgreSQL (as a local R
 
 The `batch_scoring/` folder contains a complete implementation of a batch credit scoring and limit increase system using:
 
-- **SageMaker Pipelines** for ML workflow orchestration
-- **SageMaker** for model training (CatBoost with SHAP values)
-- **PostgreSQL** for storing customer batch scores
-- **SageMaker Processing Steps** for querying, inference, evaluation, and database updates
-- **LocalStack** for local S3 storage
+- **EventBridge** for scheduled pipeline triggers (daily at 2 AM UTC)
+- **SageMaker Pipelines** for ML workflow orchestration:
+  - Model training (CatBoost with SHAP values)
+  - Query eligible customers from PostgreSQL
+  - Batch inference scoring
+- **Lambda** for business logic (limit increase/decrease decisions)
+- **PostgreSQL** for storing customer batch scores and decisions
+
+> [!NOTE]
+> On AWS, EventBridge can directly trigger SageMaker Pipelines. In LocalStack, we use a Lambda intermediary (`pipeline_trigger.py`) to start the pipeline.
 
 Run the workflow using the Makefile:
 
@@ -79,7 +84,7 @@ cd mlflow_on_aws && make start && make deploy-stack && make train
 > [!NOTE]
 > See the [README.md](mlflow_on_aws/README.md) for detailed instructions.
 
-### 🧪 SageMaker Endpoints with A/B Testing
+### 🧪 SageMaker Endpoints with A/B Testing Lambda
 
 ![Image](sagemaker_endpoints/sagemaker_endpoints_diagram.png)
 

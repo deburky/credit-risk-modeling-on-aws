@@ -36,6 +36,92 @@ When mypy reports type errors, fix them properly instead of using `# type: ignor
 
 **Always import `cast` from `typing`**. Use `cast()` when you know the exact type but mypy can't infer it. Use `Any` with explanatory comments when types are truly dynamic or incompatible at type-checking time.
 
+### Avoid sys.path Manipulation
+
+- **NEVER use `sys.path.insert()` or `sys.path.append()`** to modify the Python import path
+- This is an anti-pattern that makes code fragile, hard to test, and breaks proper package structure
+- It creates implicit dependencies and makes imports unpredictable
+
+#### Why It's Bad
+
+```python
+# BAD: sys.path manipulation
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / "training"))
+from sagemaker_pipeline import execute_pipeline_workflow
+```
+
+Problems:
+- Implicit dependencies that aren't visible in the code
+- Breaks when files are moved or restructured
+- Makes testing difficult (imports depend on file location)
+- Violates Python packaging best practices
+- Can cause import conflicts and circular dependencies
+
+#### Proper Solutions
+
+**1. Use `__init__.py` for Package Exports**
+
+Create `__init__.py` files to properly export functions from modules:
+
+```python
+# training/__init__.py
+from sagemaker_pipeline import execute_pipeline_workflow
+
+__all__ = ["execute_pipeline_workflow"]
+```
+
+Then import cleanly:
+
+```python
+# GOOD: Proper package import
+from training import execute_pipeline_workflow
+```
+
+**2. Package Dependencies with Deployment**
+
+For Lambda functions or other deployment scenarios, package the required modules:
+
+```python
+# setup_lambda.py - Package training module with Lambda
+import zipfile
+from pathlib import Path
+
+training_dir = Path("training")
+with zipfile.ZipFile("lambda.zip", "w") as zip_file:
+    # Add Lambda function
+    zip_file.write("lambda_function.py")
+    # Add training module files
+    for py_file in training_dir.glob("*.py"):
+        arcname = f"training/{py_file.name}"
+        zip_file.write(py_file, arcname)
+```
+
+**3. Use Relative Imports (Within Packages)**
+
+For imports within the same package:
+
+```python
+# GOOD: Relative import within package
+from .sagemaker_pipeline import execute_pipeline_workflow
+```
+
+**4. Install as Editable Package**
+
+For development, install the project as an editable package:
+
+```bash
+# pyproject.toml or setup.py
+pip install -e .
+```
+
+Then imports work naturally:
+
+```python
+from batch_scoring.training import execute_pipeline_workflow
+```
+
 ### Syntax Validation with py_compile
 
 - After finalizing code edits, run `py_compile` to verify syntax correctness:
@@ -51,6 +137,35 @@ When mypy reports type errors, fix them properly instead of using `# type: ignor
 ```
 - `py_compile` catches syntax errors before runtime
 - Run before committing to ensure all files are valid Python
+
+### Docstring Validation with pydocstyle
+
+- After writing or updating docstrings, run `pydocstyle` to verify they follow PEP 257 conventions:
+```bash
+  # Check single file
+  pydocstyle path/to/file.py
+  
+  # Check multiple files in a module
+  pydocstyle sagemaker_endpoints/**/*.py
+  pydocstyle batch_scoring/**/*.py
+  pydocstyle real_time_scoring/**/*.py
+  pydocstyle mlflow_on_aws/**/*.py
+  
+  # Show only errors (no summary)
+  pydocstyle --select=D path/to/file.py
+```
+- `pydocstyle` validates docstring formatting, presence, and style
+- Run after writing docstrings to ensure consistency and compliance with PEP 257
+- Common checks: missing docstrings, incorrect formatting, improper capitalization
+
+#### Docstring Rules to Follow
+
+- **Always end first line with period**: `"""Set up database."""` not `"""Set up database"""`
+- **One-line docstrings on one line**: `"""Load data."""` not `"""\nLoad data.\n"""` 
+- **Multi-line docstrings**: Blank line between summary and description
+- **No blank line after docstring**: Code immediately follows closing `"""`
+- **Imperative mood**: `"""Set up database."""` not `"""Setup database."""`
+- **Module docstrings**: Blank line between summary and description if multi-line
 
 ### Code Review with Sourcery
   - Use Sourcery for automated code review and fixes:
@@ -144,6 +259,7 @@ This indicates the tool needs access outside the workspace - use `required_permi
 ### Recommended Patterns
 
 - **DO USE:**
+    - In writing docstrings, rely on pydocstyle and end with a period.
     - Direct, informative print statements without decorative elements
     - Concise output that focuses on actionable information
     - No extra spacing or formatting beyond what's necessary
@@ -175,7 +291,7 @@ Returns:
 """
 
 # Bad: Verbose, wrapped lines, redundant info
-"""Deploy SageMaker endpoint for credit scoring model.
+"""Deploy SageMaker endpoint for credit scoring model
 
 Args:
     model_uri: The S3 URI where the trained model artifacts are stored

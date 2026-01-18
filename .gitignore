@@ -25,7 +25,6 @@ catboost_info/
 *.zip
 
 # IDE & Editors
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -53,6 +52,7 @@ lambda_packages/
 # Environment variables
 .env
 .env.local
+.env.bak
 
 # Logs
 *.log

@@ -1,6 +1,4 @@
-"""
-Processing script for SageMaker inference using CatBoost model
-"""
+"""Processing script for SageMaker inference using CatBoost model."""
 
 import argparse
 import json
@@ -37,25 +35,23 @@ except ImportError:
 
 
 def parse_args():
-    """Parse command line arguments"""
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", type=str, default="/opt/ml/model")
     return parser.parse_args()
 
 
 def load_model(model_dir):
-    """Load CatBoost model and metadata"""
+    """Load CatBoost model and metadata."""
     import tarfile
 
-    # Check if model is in a tar.gz file (from SageMaker training)
-    tar_files = [f for f in os.listdir(model_dir) if f.endswith(".tar.gz")]
-    if tar_files:
+    if tar_files := [f for f in os.listdir(model_dir) if f.endswith(".tar.gz")]:
         # Extract the tar.gz file
         tar_path = os.path.join(model_dir, tar_files[0])
         print(f"Extracting model from {tar_path}...")
         with tarfile.open(tar_path, "r:gz") as tar:
             tar.extractall(path=model_dir)
-        print("✓ Model extracted")
+        print("Model extracted")
 
     model_path = os.path.join(model_dir, "catboost_model.joblib")
     metadata_path = os.path.join(model_dir, "model_metadata.json")
@@ -71,7 +67,7 @@ def load_model(model_dir):
 
 
 def calculate_score(model, metadata, customer_features):
-    """Calculate score using CatBoost model with SHAP values"""
+    """Calculate score using CatBoost model with SHAP values."""
     feature_names = metadata["feature_names"]
     categorical_features = metadata.get("categorical_features", [])
 
@@ -111,7 +107,7 @@ def calculate_score(model, metadata, customer_features):
 
 
 def generate_sample_features(customer, feature_names):
-    """Generate sample features based on customer data"""
+    """Generate sample features based on customer data."""
     current_score = customer["current_score"]
     current_limit = float(customer.get("current_limit", 5000))
 
@@ -149,13 +145,13 @@ def generate_sample_features(customer, feature_names):
 
 
 def main():
-    """Main processing function"""
+    """Run main processing function."""
     args = parse_args()
 
     # Load model
     print(f"Loading model from {args.model_dir}...")
     model, metadata = load_model(args.model_dir)
-    print("✓ Model loaded")
+    print("Model loaded")
 
     # Load customers from input (handle S3 download structure)
     input_dir = "/opt/ml/processing/input/customers"
@@ -200,7 +196,7 @@ def main():
             }
         )
 
-    print(f"✓ Scored {len(scored_customers)} customers")
+    print(f"Scored {len(scored_customers)} customers")
 
     # Save to output
     output_path = "/opt/ml/processing/output/scored_customers.json"
@@ -209,7 +205,7 @@ def main():
     with open(output_path, "w") as f:
         json.dump(scored_customers, f, indent=2)
 
-    print(f"✓ Scored customers saved to {output_path}")
+    print(f"Scored customers saved to {output_path}")
 
 
 if __name__ == "__main__":

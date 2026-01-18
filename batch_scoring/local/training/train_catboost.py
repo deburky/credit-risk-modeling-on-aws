@@ -1,11 +1,11 @@
-"""
-Train CatBoost model for credit scoring
-Uses SHAP values for feature importance and scoring
+"""Train CatBoost model for credit scoring.
+
+Uses SHAP values for feature importance and scoring.
 """
 
 import json
 import logging
-import os
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def load_data(data_path=None):
-    """Load credit data"""
+    """Load credit data."""
     if data_path is None:
-        from pathlib import Path
-
-        data_path = Path(__file__).parent.parent / "data" / "BankCaseStudyData.csv"
+        data_path = (
+            Path(__file__).parent.parent.parent / "data" / "BankCaseStudyData.csv"
+        )
     logger.info(f"Loading data from {data_path}")
     dataset = pd.read_csv(data_path)
     logger.info(f"Data shape: {dataset.shape}")
@@ -31,8 +31,7 @@ def load_data(data_path=None):
 
 
 def find_optimal_cutoff(scores, y_true):
-    """
-    Find optimal cutoff that maximizes separation between goods and bads
+    """Find optimal cutoff that maximizes separation between goods and bads.
 
     Strategy: Find threshold where difference between %bads captured and %goods captured is maximum
     (Same approach as Chapter 1)
@@ -79,9 +78,8 @@ def find_optimal_cutoff(scores, y_true):
 
 
 def main():
-    logger.info("=" * 80)
+    """Run CatBoost credit scoring training."""
     logger.info("CatBoost Credit Scoring Training")
-    logger.info("=" * 80)
 
     # Load data
     dataset = load_data()
@@ -156,8 +154,7 @@ def main():
     y_pred_proba = model.predict_proba(X_test)[:, 1]
     gini = roc_auc_score(y_test, y_pred_proba) * 2 - 1
 
-    logger.info("\nModel Performance:")
-    logger.info(f"{'=' * 80}")
+    logger.info("Model Performance:")
     logger.info(f"Gini score: {gini:.4f}")
 
     # PDO (Points to Double Odds) parameters - same as Chapter 1
@@ -207,8 +204,7 @@ def main():
     train_scores = offset + factor * (-train_log_odds)
     test_scores = offset + factor * (-test_log_odds)
 
-    logger.info("\nScore Distribution:")
-    logger.info(f"{'=' * 80}")
+    logger.info("Score Distribution:")
     logger.info(f"  Min:     {test_scores.min():.0f}")
     logger.info(f"  25%:     {np.percentile(test_scores, 25):.0f}")
     logger.info(f"  Median:  {np.median(test_scores):.0f}")
@@ -220,15 +216,15 @@ def main():
     logger.info(f"\nOptimal cutoff: {cutoff}")
 
     # Save artifacts
-    os.makedirs("model_output", exist_ok=True)
+    model_output_dir = Path(__file__).parent.parent / "model_output"
+    model_output_dir.mkdir(exist_ok=True)
 
-    logger.info(f"\n{'=' * 80}")
     logger.info("Saving artifacts...")
-    logger.info(f"{'=' * 80}")
 
     # Save model
-    joblib.dump(model, "model_output/catboost_model.joblib")
-    logger.info("✓ Model: model_output/catboost_model.joblib")
+    model_path = model_output_dir / "catboost_model.joblib"
+    joblib.dump(model, model_path)
+    logger.info(f"Model: {model_path}")
 
     # Save metadata
     metadata = {
@@ -246,13 +242,11 @@ def main():
         "numerical_features": num_features,
     }
 
-    with open("model_output/model_metadata.json", "w") as f:
+    metadata_path = model_output_dir / "model_metadata.json"
+    with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
-    logger.info("✓ Metadata: model_output/model_metadata.json")
-
-    logger.info(f"\n{'=' * 80}")
-    logger.info("✓ CatBoost training complete!")
-    logger.info(f"{'=' * 80}\n")
+    logger.info(f"Metadata: {metadata_path}")
+    logger.info("CatBoost training complete")
 
     return model, metadata
 

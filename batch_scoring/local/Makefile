@@ -1,9 +1,9 @@
-.PHONY: help start stop setup-db run-workflow check-results test-schedule test-services test-all clean
+.PHONY: help start stop setup-db run-workflow check-results setup-eventbridge train-catboost train-sagemaker test-lambda test-db-update clean
 
 .DEFAULT_GOAL := help
 
 help: ## Show this help
-	@echo "Chapter 2: Batch Scoring & Limit Increase (Local)"
+	@echo "Batch Scoring & Loan Limit Management"
 	@echo "=================================================="
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -30,80 +30,61 @@ stop: ## Stop PostgreSQL and LocalStack
 	docker-compose down
 
 setup-db: ## Setup PostgreSQL database and load sample data
-	uv run python scripts/setup_database.py
+	uv run python scripts/database.py setup
 
 train-catboost: ## Train CatBoost model with SHAP values (direct)
-	uv run python train_catboost.py
+	uv run python training/train_catboost.py
 
 build-docker: ## Build custom SageMaker training Docker image for CatBoost
 	@if docker images -q catboost-sagemaker:latest | grep -q .; then \
 		echo "✓ Docker image 'catboost-sagemaker:latest' already exists, skipping build"; \
 	else \
 		echo "Building custom SageMaker training container for CatBoost..."; \
-		docker build -t catboost-sagemaker:latest -f Dockerfile .; \
+		docker build -t catboost-sagemaker:latest -f training/Dockerfile .; \
 		echo "✓ Docker image built: catboost-sagemaker:latest"; \
 	fi
 
 train-sagemaker: build-docker ## Train CatBoost with SageMaker Local Mode using custom container (saves to S3)
-	uv run python sagemaker_train.py
+	uv run python training/sagemaker_train.py
 
-clean-docker: ## Remove custom Docker image
-	docker rmi catboost-sagemaker:latest 2>/dev/null || echo "Image not found or already removed"
-
-run-workflow: ## Run the limit increase workflow (SageMaker Pipeline)
-	uv run python sagemaker_pipeline.py
-
-check-results: ## Check limit increase results from PostgreSQL
-	uv run python scripts/check_results.py
-
-deploy-stack: ## Deploy CloudFormation stack (Step Functions + EventBridge)
-	uv run python deploy_stack.py
-
-delete-stack: ## Delete CloudFormation stack
-	uv run python deploy_stack.py delete
-
-stack-status: ## Show stack status
-	uv run python deploy_stack.py status
-
-test-services: ## Test if LocalStack services (EventBridge, Step Functions) are available
-	uv run python scripts/test_services.py
-
-test-schedule: ## Test EventBridge scheduled rule (manually trigger)
-	uv run python scripts/test_schedule.py
-
-test-all: ## Run all tests (services, workflow, results)
+run-workflow: start build-docker ## Run the complete workflow (start services, setup, build, EventBridge, pipeline, results)
 	@echo "=================================================================================="
-	@echo "Running All Tests"
+	@echo "Running Complete Workflow"
 	@echo "=================================================================================="
 	@echo ""
-	@echo "Step 1/3: Testing LocalStack services..."
-	@$(MAKE) test-services
+	@echo "Step 1/5: Setting up database..."
+	@$(MAKE) setup-db
 	@echo ""
-	@echo "Step 2/3: Running workflow..."
-	@$(MAKE) run-workflow
+	@echo "Step 2/5: Setting up EventBridge..."
+	@$(MAKE) setup-eventbridge || (echo "✗ EventBridge setup failed"; exit 1)
 	@echo ""
-	@echo "Step 3/3: Checking results..."
+	@echo "Step 3/5: Running pipeline..."
+	@uv run python training/sagemaker_pipeline.py || (echo "✗ Pipeline failed - skipping results check"; exit 1)
+	@echo ""
+	@echo "Step 4/5: Checking results..."
 	@$(MAKE) check-results
 	@echo ""
 	@echo "=================================================================================="
-	@echo "✓ All tests complete!"
+	@echo "✓ Workflow complete!"
 	@echo "=================================================================================="
 
-diagram: ## Generate architecture diagram
-	cd .. && uv run python draw_diagram.py
+check-results: ## Check limit increase results from PostgreSQL
+	uv run python scripts/database.py check
 
-pdf: ## Convert technical document to letter-size PDF
-	cd .. && \
-	gs -sPAPERSIZE=letter \
-		-dFIXEDMEDIA \
-		-dPDFFitPage \
-		-dCompatibilityLevel=1.4 \
-		-sDEVICE=pdfwrite \
-		-o batch_scoring_credit_limit_management.pdf \
-		technical_doc.pdf && \
-	echo "✓ Created batch_scoring_credit_limit_management.pdf"
+setup-eventbridge: ## Setup EventBridge rule to trigger pipeline via Lambda
+	uv run python scripts/setup_eventbridge.py
+
+test-lambda: ## Test Lambda function independently
+	uv run python scripts/test_lambda.py
+
+test-db-update: ## Test database update independently
+	@echo "Creating test decisions..."
+	@echo '[{"customer_id": "CUST_0001", "current_score": 650, "new_score": 720, "current_limit": 5000.0, "new_limit": 7500, "decision": "INCREASE", "reason": "High score"}, {"customer_id": "CUST_0002", "current_score": 580, "new_score": 450, "current_limit": 3000.0, "new_limit": 2700, "decision": "DECREASE", "reason": "Low score"}]' > test_decisions.json
+	@uv run python scripts/database.py update --decisions-file test_decisions.json
+	@rm -f test_decisions.json
+	@echo "Test complete - check results with 'make check-results'"
+
 
 clean: ## Clean up everything
 	docker-compose down -v
 	rm -rf localstack_data/
-

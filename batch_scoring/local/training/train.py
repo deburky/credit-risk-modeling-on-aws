@@ -1,6 +1,6 @@
-"""
-SageMaker training script for CatBoost credit scoring model
-This runs inside the SageMaker container
+"""SageMaker training script for CatBoost credit scoring model.
+
+This runs inside the SageMaker container.
 """
 
 import argparse
@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def find_optimal_cutoff(scores, y_true):
-    """
-    Find optimal cutoff that maximizes separation between goods and bads
-    """
+    """Find optimal cutoff that maximizes separation between goods and bads."""
     dataframe_viz = pd.DataFrame({"is_bad": y_true, "score": scores})
 
     thresholds = sorted(dataframe_viz["score"].unique(), reverse=True)
@@ -56,11 +54,8 @@ def find_optimal_cutoff(scores, y_true):
 
 
 def train(args):
-    """Train CatBoost credit scoring model"""
-
-    logger.info("=" * 80)
+    """Train CatBoost credit scoring model."""
     logger.info("CatBoost Credit Scoring Training - SageMaker")
-    logger.info("=" * 80)
 
     # Load data
     logger.info(f"Loading data from {args.train}")
@@ -110,8 +105,8 @@ def train(args):
     X_test.loc[:, cat_features] = X_test.loc[:, cat_features].astype(str).fillna("NA")
 
     logger.info(f"Features ({len(features)}): {features}")
-    logger.info(f"  Categorical: {cat_features}")
-    logger.info(f"  Numerical: {num_features}")
+    logger.info(f"Categorical: {cat_features}")
+    logger.info(f"Numerical: {num_features}")
     logger.info(
         f"Target distribution: Decline={y_train.sum()} ({y_train.mean():.1%}), Accept={len(y_train) - y_train.sum()} ({1 - y_train.mean():.1%})"
     )
@@ -142,7 +137,7 @@ def train(args):
     gini = roc_auc_score(y_test, y_pred_proba) * 2 - 1
 
     logger.info("\nModel Performance:")
-    logger.info(f"  Gini: {gini:.4f}")
+    logger.info(f"Gini score: {gini:.4f}")
 
     # PDO (Points to Double Odds) parameters
     target_score = args.target_score
@@ -184,7 +179,7 @@ def train(args):
 
     logger.info("\nScore Distribution:")
     logger.info(
-        f"  Min: {test_scores.min():.0f}, Median: {np.median(test_scores):.0f}, Max: {test_scores.max():.0f}"
+        f"Min: {test_scores.min():.0f}, Median: {np.median(test_scores):.0f}, Max: {test_scores.max():.0f}"
     )
 
     # Find optimal cutoff
@@ -194,7 +189,7 @@ def train(args):
     # Save model
     model_path = os.path.join(args.model_dir, "catboost_model.joblib")
     joblib.dump(model, model_path)
-    logger.info(f"\n✓ Model saved to: {model_path}")
+    logger.info(f"Model saved to: {model_path}")
 
     # Save metadata
     metadata = {
@@ -215,11 +210,8 @@ def train(args):
     metadata_path = os.path.join(args.model_dir, "model_metadata.json")
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
-    logger.info(f"✓ Metadata saved to: {metadata_path}")
-
-    logger.info("\n" + "=" * 80)
-    logger.info("✓ Training complete!")
-    logger.info("=" * 80)
+    logger.info(f"Metadata saved to: {metadata_path}")
+    logger.info("Training complete")
 
 
 if __name__ == "__main__":
