@@ -4,13 +4,34 @@ Stores model in LocalStack S3.
 """
 
 import logging
-import subprocess
 from pathlib import Path
 
 import boto3
 from botocore.config import Config
 from sagemaker.estimator import Estimator
 from sagemaker.local import LocalSession
+
+# Import docker_utils from scripts directory
+# Try multiple import strategies since scripts may not be a package
+DockerManager = None
+try:
+    # Try as package (if scripts/__init__.py exists)
+    from scripts.docker_utils import DockerManager
+except ImportError:
+    try:
+        # Try direct import (if running from local/ directory)
+        import importlib.util
+
+        docker_utils_path = Path(__file__).parent.parent / "scripts" / "docker_utils.py"
+        if docker_utils_path.exists():
+            spec = importlib.util.spec_from_file_location(
+                "docker_utils", docker_utils_path
+            )
+            docker_utils = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(docker_utils)
+            DockerManager = docker_utils.DockerManager
+    except Exception:
+        pass
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,12 +68,27 @@ def setup_s3_bucket():
 def build_docker_image(image_name="catboost-sagemaker:latest"):
     """Build custom Docker image for SageMaker training."""
     dockerfile_path = Path(__file__).parent / "Dockerfile"
+    build_context = dockerfile_path.parent.parent
+
+    if DockerManager is not None:
+        # Use Docker SDK for Python
+        try:
+            docker_mgr = DockerManager()
+            return docker_mgr.build_image(
+                image_name=image_name,
+                dockerfile_path=dockerfile_path,
+                build_context=build_context,
+            )
+        except ImportError:
+            logger.warning("docker package not available, falling back to subprocess")
+        except Exception as e:
+            logger.error(f"Docker SDK failed: {e}, falling back to subprocess")
+
+    # Fallback to subprocess if docker SDK not available
+    import subprocess
 
     if not dockerfile_path.exists():
         raise FileNotFoundError(f"Dockerfile not found: {dockerfile_path}")
-
-    logger.info(f"Building Docker image: {image_name}")
-    logger.info(f"Dockerfile: {dockerfile_path}")
 
     # Check if image already exists
     result = subprocess.run(
@@ -63,16 +99,16 @@ def build_docker_image(image_name="catboost-sagemaker:latest"):
         logger.info(f"Docker image '{image_name}' already exists, skipping build")
         return image_name
 
-        # Build the image (context is parent directory to access data/)
-        build_cmd = [
-            "docker",
-            "build",
-            "-t",
-            image_name,
-            "-f",
-            str(dockerfile_path),
-            str(dockerfile_path.parent.parent),
-        ]
+    # Build the image (context is parent directory to access data/)
+    build_cmd = [
+        "docker",
+        "build",
+        "-t",
+        image_name,
+        "-f",
+        str(dockerfile_path),
+        str(build_context),
+    ]
 
     logger.info(f"Running: {' '.join(build_cmd)}")
     result = subprocess.run(build_cmd, capture_output=True, text=True)

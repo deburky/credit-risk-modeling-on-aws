@@ -1,4 +1,4 @@
-.PHONY: help start stop restart-localstack deploy-stack delete-stack stack-status send-applications check-approvals clean run-workflow
+.PHONY: help start stop restart-localstack deploy-stack delete-stack stack-status send-applications check-approvals clean run-workflow train-scorecard build-docker train-sagemaker package-lambda test-inference verify-setup stack-events
 
 .DEFAULT_GOAL := help
 
@@ -9,42 +9,13 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 start: ## Start LocalStack
-	docker-compose up -d
-	@sleep 5
-	@echo "✓ LocalStack running at http://localhost:4566"
+	uv run python scripts/docker_services.py start
 
 stop: ## Stop LocalStack
-	@if docker ps --filter "name=real-time-scoring-localstack" --format "{{.Names}}" | grep -q real-time-scoring-localstack; then \
-		docker-compose down; \
-		echo "✓ LocalStack stopped (port 4566 freed)"; \
-	else \
-		echo "⚠️  No real-time-scoring LocalStack container found."; \
-		echo "   Checking for other LocalStack instances on port 4566..."; \
-		OTHER_LS=$$(docker ps --filter "publish=4566" --format "{{.Names}}" | head -1); \
-		if [ -n "$$OTHER_LS" ]; then \
-			echo "   Found: $$OTHER_LS (from another module)"; \
-			read -p "   Stop it to free port 4566? [y/N] " -n 1 -r; \
-			echo; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				docker stop $$OTHER_LS; \
-				echo "✓ Stopped $$OTHER_LS (port 4566 freed)"; \
-			else \
-				echo "   Keeping $$OTHER_LS running"; \
-			fi; \
-		else \
-			echo "   No LocalStack instances found on port 4566"; \
-		fi; \
-	fi
+	uv run python scripts/docker_services.py stop
 
 restart-localstack: ## Stop LocalStack, remove all data, and restart fresh
-	@echo "Stopping LocalStack..."
-	@docker-compose down -v
-	@echo "Removing LocalStack data..."
-	@rm -rf localstack_data/ 2>/dev/null || true
-	@echo "Starting fresh LocalStack..."
-	@docker-compose up -d
-	@sleep 8
-	@echo "✓ LocalStack restarted fresh at http://localhost:4566"
+	uv run python scripts/docker_services.py restart
 
 deploy-stack: ## Deploy CloudFormation stack
 	uv run python scripts/deploy_stack.py
@@ -124,6 +95,3 @@ run-workflow: ## Run complete end-to-end workflow with SageMaker (start → trai
 clean: ## Clean up everything
 	docker-compose down -v
 	rm -rf localstack_data/ model_output/
-
-clean-docker: ## Remove custom Docker image
-	docker rmi credit-scoring-sagemaker:latest 2>/dev/null || echo "Image not found or already removed"

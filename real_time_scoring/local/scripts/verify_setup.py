@@ -21,25 +21,25 @@ def check_localstack():
 
 
 def check_docker_image():
-    """Check if Docker image exists"""
-    import subprocess
+    """Check if Docker image exists."""
+    import importlib.util
 
     try:
-        result = subprocess.run(
-            ["docker", "images", "-q", "credit-scoring-sagemaker:latest"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.stdout.strip():
-            print("✓ Docker image 'credit-scoring-sagemaker:latest' exists")
+        docker_utils_path = Path(__file__).parent / "docker_utils.py"
+        spec = importlib.util.spec_from_file_location("docker_utils", docker_utils_path)
+        docker_utils = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(docker_utils)
+        docker_mgr = docker_utils.DockerManager()
+
+        if docker_mgr.image_exists("credit-scoring-sagemaker:latest"):
+            print("Docker image 'credit-scoring-sagemaker:latest' exists")
             return True
         else:
-            print("✗ Docker image 'credit-scoring-sagemaker:latest' not found")
+            print("Docker image 'credit-scoring-sagemaker:latest' not found")
             print("  Run: make build-docker")
             return False
     except Exception as e:
-        print(f"✗ Could not check Docker image: {e}")
+        print(f"Could not check Docker image: {e}")
         return False
 
 
@@ -168,5 +168,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
     sys.exit(main())

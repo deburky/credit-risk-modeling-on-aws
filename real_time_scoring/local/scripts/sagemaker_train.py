@@ -3,8 +3,8 @@ Train credit scorecard using SageMaker Local Mode
 Stores model in LocalStack S3
 """
 
+import importlib.util
 import logging
-import subprocess
 from pathlib import Path
 
 import boto3
@@ -45,44 +45,28 @@ def setup_s3_bucket():
 
 
 def build_docker_image(image_name="credit-scoring-sagemaker:latest"):
-    """Build custom Docker image for SageMaker training"""
+    """Build custom Docker image for SageMaker training."""
     dockerfile_path = Path(__file__).parent.parent / "Dockerfile"
+    build_context = dockerfile_path.parent
 
-    if not dockerfile_path.exists():
-        raise FileNotFoundError(f"Dockerfile not found: {dockerfile_path}")
+    # Import docker_utils
+    docker_utils_path = Path(__file__).parent / "docker_utils.py"
+    spec = importlib.util.spec_from_file_location("docker_utils", docker_utils_path)
+    docker_utils = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(docker_utils)
+    docker_mgr = docker_utils.DockerManager()
 
-    logger.info(f"Building Docker image: {image_name}")
-    logger.info(f"Dockerfile: {dockerfile_path}")
-
-    # Check if image already exists
-    result = subprocess.run(
-        ["docker", "images", "-q", image_name], capture_output=True, text=True
-    )
-
-    if result.stdout.strip():
-        logger.info(f"✓ Docker image '{image_name}' already exists, skipping build")
+    try:
+        image_name = docker_mgr.build_image(
+            image_name=image_name,
+            dockerfile_path=dockerfile_path,
+            build_context=build_context,
+        )
+        logger.info(f"Successfully built Docker image: {image_name}")
         return image_name
-
-    # Build the image
-    build_cmd = [
-        "docker",
-        "build",
-        "-t",
-        image_name,
-        "-f",
-        str(dockerfile_path),
-        str(dockerfile_path.parent),
-    ]
-
-    logger.info(f"Running: {' '.join(build_cmd)}")
-    result = subprocess.run(build_cmd, capture_output=True, text=True)
-
-    if result.returncode != 0:
-        logger.error(f"Docker build failed:\n{result.stderr}")
-        raise RuntimeError(f"Failed to build Docker image: {result.stderr}")
-
-    logger.info(f"✓ Successfully built Docker image: {image_name}")
-    return image_name
+    except Exception as e:
+        logger.error(f"Docker build failed: {e}")
+        raise
 
 
 def upload_training_data(s3_client):

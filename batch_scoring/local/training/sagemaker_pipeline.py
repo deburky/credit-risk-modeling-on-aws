@@ -139,7 +139,7 @@ def create_query_step(processor):
             "--db-password",
             "creditrisk123",
             "--limit",
-            "20",
+            "0",  # Process all eligible customers (0 = no limit)
             "--output-path",
             "/opt/ml/processing/output/customers.json",
         ],
@@ -509,7 +509,7 @@ def execute_pipeline_workflow():
             print("Database updated successfully")
 
             print("Workflow completed successfully")
-            print("Run 'make check-results' to see the results in PostgreSQL")
+            print("Results have been saved to PostgreSQL")
         except Exception as e:
             print(f"Error invoking Lambda function: {e}")
             print("Pipeline completed but Lambda invocation failed")

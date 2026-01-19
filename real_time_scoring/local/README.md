@@ -225,10 +225,10 @@ The Docker image is automatically built on first run. To rebuild manually:
 make build-docker
 ```
 
-To remove the Docker image:
+To remove the Docker image manually:
 
 ```bash
-make clean-docker
+docker rmi credit-scoring-sagemaker:latest
 ```
 
 ## Cleanup
@@ -238,8 +238,8 @@ make clean-docker
 make stop
 make clean
 
-# Optionally remove Docker image
-make clean-docker
+# Optionally remove Docker image manually
+docker rmi credit-scoring-sagemaker:latest
 ```
 
 ## Configuration

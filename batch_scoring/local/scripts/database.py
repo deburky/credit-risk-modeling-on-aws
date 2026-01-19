@@ -162,8 +162,6 @@ class Database:
         updated_count = 0
         for decision_result in decisions:
             db_decision = decision_result["decision"]
-            if db_decision == "KEEP":
-                db_decision = "NO_CHANGE"
 
             cursor.execute(
                 """
@@ -197,24 +195,26 @@ class Database:
         conn = self.connect()
         cursor = conn.cursor()
 
-        # Get summary
+        # Get summary - only count customers with decisions (eligible customers that were processed)
         cursor.execute(
             """
             SELECT 
-                COUNT(*) as total,
+                COUNT(CASE WHEN limit_increase_decision IS NOT NULL THEN 1 END) as total_processed,
                 COUNT(CASE WHEN limit_increase_decision = 'INCREASE' THEN 1 END) as increase,
                 COUNT(CASE WHEN limit_increase_decision = 'DECREASE' THEN 1 END) as decrease,
-                COUNT(CASE WHEN limit_increase_decision = 'NO_CHANGE' THEN 1 END) as no_change
+                COUNT(CASE WHEN limit_increase_decision = 'KEEP' THEN 1 END) as keep
             FROM batch_scores
+            WHERE current_score >= 600
+              AND current_limit < 10000
         """
         )
         summary = cursor.fetchone()
 
         print("Limit Increase Results Summary")
-        print(f"Total customers: {summary[0]}")
+        print(f"Total eligible customers processed: {summary[0]}")
         print(f"Increase: {summary[1]}")
         print(f"Decrease: {summary[2]}")
-        print(f"No change: {summary[3]}")
+        print(f"Keep: {summary[3]}")
 
         # Get increase customers
         cursor.execute(
@@ -289,21 +289,37 @@ class Database:
         conn = self.connect()
         cursor = conn.cursor()
 
-        query = """
-            SELECT 
-                customer_id,
-                current_score,
-                current_limit,
-                application_date
-            FROM batch_scores
-            WHERE current_score >= 600
-              AND current_limit < 10000
-              AND limit_increase_decision IS NULL
-            ORDER BY current_score DESC
-            LIMIT %s
-        """
-
-        cursor.execute(query, (limit,))
+        # Build query - if limit is None or 0, process all eligible customers
+        if limit and limit > 0:
+            query = """
+                SELECT 
+                    customer_id,
+                    current_score,
+                    current_limit,
+                    application_date
+                FROM batch_scores
+                WHERE current_score >= 600
+                  AND current_limit < 10000
+                  AND limit_increase_decision IS NULL
+                ORDER BY current_score DESC
+                LIMIT %s
+            """
+            cursor.execute(query, (limit,))
+        else:
+            # Process all eligible customers (no limit)
+            query = """
+                SELECT 
+                    customer_id,
+                    current_score,
+                    current_limit,
+                    application_date
+                FROM batch_scores
+                WHERE current_score >= 600
+                  AND current_limit < 10000
+                  AND limit_increase_decision IS NULL
+                ORDER BY current_score DESC
+            """
+            cursor.execute(query)
         customers = cursor.fetchall()
 
         # Convert to list of dicts

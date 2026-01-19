@@ -14,8 +14,7 @@ make setup-db
 # Run workflow
 make run-workflow
 
-# Check results
-make check-results
+# Check results (automatically done in run-workflow)
 
 # Setup EventBridge trigger (optional)
 make setup-eventbridge

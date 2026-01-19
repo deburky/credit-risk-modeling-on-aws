@@ -19,6 +19,7 @@ dependencies = [
     "mlflow>=3.6.0",
     "sagemaker-mlflow>=0.2.0",
     "prek>=0.2.25",
+    "docker>=7.1.0",
 ]
 
 [dependency-groups]
