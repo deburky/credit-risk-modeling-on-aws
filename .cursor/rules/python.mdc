@@ -238,6 +238,7 @@ This indicates the tool needs access outside the workspace - use `required_permi
     - Any decorative print statements using repeated characters
 - **DO NOT USE empty print statements for spacing:**
     - `print()` used only for adding blank lines in output
+    - `print("")` is the same as `print()`
 - **DO NOT USE bullet point summary statements:**
     - `print("  • AppConfig configuration was updated...")`
     - `print("  - Key finding: ...")`

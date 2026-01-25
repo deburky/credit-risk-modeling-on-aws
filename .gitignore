@@ -14,9 +14,13 @@ build/
 # Virtual environments
 venv/
 env/
+env.bak
 ENV/
 .venv/
 uv.lock
+
+# Book files
+book/
 
 # Catboost
 catboost_info/
@@ -66,11 +70,10 @@ tmp/
 assets/
 
 # MLflow on AWS (SAM)
-mlflow_on_aws/.local-testing/
-mlflow_on_aws/.aws-sam/
-mlflow_on_aws/__cf_mlflow_stack.yaml
-mlflow_on_aws/__log-mlflow-stack.txt
-mlflow_on_aws/iam-policies/*-resolved.json
-mlflow_on_aws/minio_data/
-mlflow_on_aws/postgres_data/
+mlflow_on_aws/local/.aws-sam/
+mlflow_on_aws/local/model_output/
+mlflow_on_aws/local/localstack_data/
+mlflow_on_aws/local/__cf_mlflow_stack.yaml
+mlflow_on_aws/local/__log-mlflow-stack.txt
+mlflow_on_aws/local/postgres_data/
 # Note: samconfig.toml is kept in repo (users can customize)

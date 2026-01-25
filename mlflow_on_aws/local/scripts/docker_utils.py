@@ -1,6 +1,7 @@
 """Docker utilities for managing containers and images."""
 
 import contextlib
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -13,7 +14,7 @@ from docker.errors import APIError, ImageNotFound
 class DockerManager:
     """Manage Docker containers and images programmatically."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Docker client."""
         try:
             self.client = docker.from_env()
@@ -39,7 +40,7 @@ class DockerManager:
         """Build Docker image from Dockerfile.
 
         Args:
-            image_name: Name for the image (e.g., "catboost-sagemaker:latest")
+            image_name: Name for the image (e.g., "mlflow-sagemaker-train:latest")
             dockerfile_path: Path to Dockerfile
             build_context: Build context directory
             tag: Optional tag (defaults to image_name)
@@ -69,10 +70,9 @@ class DockerManager:
                 path=str(build_context),
                 dockerfile=str(dockerfile_path.relative_to(build_context)),
                 tag=tag,
-                rm=True,  # Remove intermediate containers
+                rm=True,
             )
 
-            # Print build logs
             for log in build_logs:
                 if "stream" in log:
                     print(log["stream"].strip())
@@ -82,6 +82,20 @@ class DockerManager:
 
         except APIError as e:
             raise RuntimeError(f"Failed to build Docker image: {e}") from e
+
+    def remove_image(self, image_name: str) -> None:
+        """Remove Docker image.
+
+        Args:
+            image_name: Name of image to remove
+        """
+        try:
+            self.client.images.remove(image_name, force=True)
+            print(f"Removed Docker image: {image_name}")
+        except ImageNotFound:
+            print(f"Docker image '{image_name}' not found, skipping removal")
+        except APIError as e:
+            print(f"Warning: Could not remove image '{image_name}': {e}")
 
     def container_exists(self, container_name: str) -> bool:
         """Check if container exists (running or stopped)."""
@@ -99,6 +113,16 @@ class DockerManager:
         except docker.errors.NotFound:
             return False
 
+    def is_localstack_running(self) -> bool:
+        """Check if LocalStack container is running on port 4566."""
+        try:
+            containers = self.client.containers.list(
+                filters={"publish": "4566"}, all=True
+            )
+            return len(containers) > 0
+        except Exception:
+            return False
+
     def start_containers(
         self,
         compose_file: Path,
@@ -106,9 +130,6 @@ class DockerManager:
         detach: bool = True,
     ) -> dict[str, dict]:
         """Start containers using docker-compose.
-
-        Note: This uses docker-compose CLI. For pure Python, consider
-        docker-compose Python package or managing containers individually.
 
         Args:
             compose_file: Path to docker-compose.yml
@@ -121,16 +142,78 @@ class DockerManager:
         if not compose_file.exists():
             raise FileNotFoundError(f"docker-compose.yml not found: {compose_file}")
 
+        # Check if docker-compose is available
+        compose_check = subprocess.run(
+            ["docker-compose", "--version"], capture_output=True, text=True
+        )
+        if compose_check.returncode != 0:
+            raise RuntimeError(
+                "docker-compose not found. Please install docker-compose."
+            ) from None
+
         compose_dir = compose_file.parent
-        cmd = ["docker-compose", "-f", str(compose_file), "up", "-d"]
+
+        # Stop and remove any existing containers first to avoid conflicts
+        # This handles the case where containers from a previous run still exist
+        stop_cmd = [
+            "docker-compose",
+            "-f",
+            str(compose_file),
+            "down",
+            "--remove-orphans",
+        ]
+        subprocess.run(stop_cmd, cwd=compose_dir, capture_output=True, text=True)
+        # Ignore errors from stop - containers may not exist
+
+        # Also force-remove containers by name using Docker API as fallback
+        # This handles containers that docker-compose doesn't know about
+        container_names = [
+            "mlflow-on-aws-localstack",
+            "mlflow-on-aws-postgres",
+            "mlflow-on-aws-server",
+        ]
+        for container_name in container_names:
+            try:
+                container = self.client.containers.get(container_name)
+                print(f"Force removing existing container: {container_name}")
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                # Container doesn't exist, which is fine
+                pass
+            except Exception as e:
+                # Log but don't fail - we'll try to start anyway
+                print(f"Warning: Could not remove container {container_name}: {e}")
+
+        # Give Docker a moment to clean up
+        time.sleep(1)
+
+        cmd = [
+            "docker-compose",
+            "-f",
+            str(compose_file),
+            "up",
+            "-d",
+            "--force-recreate",
+            "--remove-orphans",
+        ]
 
         if services:
             cmd.extend(services)
 
+        print(f"Running: {' '.join(cmd)}")
+        print("This may take a while if images need to be pulled or built...")
         result = subprocess.run(cmd, cwd=compose_dir, capture_output=True, text=True)
 
         if result.returncode != 0:
+            print(f"Error: {result.stderr}")
+            if result.stdout:
+                print(f"Output: {result.stdout}")
             raise RuntimeError(f"Failed to start containers: {result.stderr}") from None
+
+        if result.stdout:
+            print(result.stdout)
+        else:
+            print("Containers started successfully")
 
         # Wait for services to be ready
         time.sleep(5)
@@ -152,8 +235,6 @@ class DockerManager:
         if status_result.returncode == 0:
             for line in status_result.stdout.strip().split("\n"):
                 if line:
-                    import json
-
                     info = json.loads(line)
                     containers[info.get("Service", "")] = {
                         "name": info.get("Name", ""),
@@ -170,8 +251,6 @@ class DockerManager:
             compose_file: Path to docker-compose.yml
             remove_volumes: Also remove volumes
         """
-        import subprocess
-
         if not compose_file.exists():
             raise FileNotFoundError(f"docker-compose.yml not found: {compose_file}")
 
@@ -185,6 +264,44 @@ class DockerManager:
 
         if result.returncode != 0:
             raise RuntimeError(f"Failed to stop containers: {result.stderr}") from None
+
+    def get_container_status(self, compose_file: Path) -> dict[str, dict]:
+        """Get status of containers from docker-compose.
+
+        Args:
+            compose_file: Path to docker-compose.yml
+
+        Returns:
+            Dictionary mapping service names to container info
+        """
+        if not compose_file.exists():
+            raise FileNotFoundError(f"docker-compose.yml not found: {compose_file}")
+
+        compose_dir = compose_file.parent
+        status_cmd = [
+            "docker-compose",
+            "-f",
+            str(compose_file),
+            "ps",
+            "--format",
+            "json",
+        ]
+        status_result = subprocess.run(
+            status_cmd, cwd=compose_dir, capture_output=True, text=True
+        )
+
+        containers = {}
+        if status_result.returncode == 0:
+            for line in status_result.stdout.strip().split("\n"):
+                if line:
+                    info = json.loads(line)
+                    containers[info.get("Service", "")] = {
+                        "name": info.get("Name", ""),
+                        "status": info.get("State", ""),
+                        "ports": info.get("Publishers", []),
+                    }
+
+        return containers
 
     def wait_for_container_health(
         self, container_name: str, timeout: int = 60, interval: int = 2

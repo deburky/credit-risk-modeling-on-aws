@@ -4,7 +4,6 @@ Uses SageMaker containerized training with MLflow integration
 """
 
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
@@ -12,6 +11,7 @@ import boto3
 from botocore.exceptions import ClientError
 from sagemaker.estimator import Estimator
 from sagemaker.local import LocalSession
+from scripts.docker_utils import DockerManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,14 +23,18 @@ LOCALSTACK_ENDPOINT = "http://localhost:4566"
 MLFLOW_TRACKING_URI = (
     "http://host.docker.internal:5001"  # Access host MLflow from container
 )
-# MinIO configuration for MLflow artifacts
-MINIO_ENDPOINT = "http://host.docker.internal:9000"  # Access host MinIO from container
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
+# LocalStack S3 configuration for MLflow artifacts
+# From SageMaker container, use host.docker.internal to reach host LocalStack
+# Note: Region-specific format doesn't work from containers, use regular endpoint
+LOCALSTACK_S3_ENDPOINT = (
+    "http://host.docker.internal:4566"  # Access host LocalStack from container
+)
+AWS_ACCESS_KEY_ID = "test"
+AWS_SECRET_ACCESS_KEY = "test"
 MLFLOW_BUCKET = "mlflow"
 
 
-def get_stack_role_arn():
+def get_stack_role_arn() -> str:
     """Get MLflow Tracking Server role ARN from CloudFormation stack
 
     Raises:
@@ -69,7 +73,7 @@ def get_stack_role_arn():
         for output in outputs:
             if output["OutputKey"] == "MLflowTrackingServerRoleArn":
                 role_arn = output["OutputValue"]
-                logger.info(f"✓ Found role ARN from stack '{STACK_NAME}': {role_arn}")
+                logger.info(f"Found role ARN from stack '{STACK_NAME}': {role_arn}")
                 return role_arn
 
         raise RuntimeError(
@@ -91,66 +95,29 @@ def get_stack_role_arn():
         raise RuntimeError(f"Error querying stack '{STACK_NAME}': {e}") from e
 
 
-def build_docker_image():
-    """Build Docker image for SageMaker training with MLflow"""
-    dockerfile_path = Path(__file__).parent / "Dockerfile.train"
+def build_docker_image() -> str:
+    """Build Docker image for SageMaker training with MLflow.
+
+    Returns:
+        Image name with tag
+    """
+    dockerfile_path = Path(__file__).parent / "training" / "Dockerfile.train"
 
     if not dockerfile_path.exists():
-        logger.info("Creating Dockerfile for training...")
-        dockerfile_content = """FROM python:3.11-slim
-
-WORKDIR /opt/ml/code
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \\
-    gcc g++ && \\
-    rm -rf /var/lib/apt/lists/*
-
-# Install uv
-RUN pip install --no-cache-dir uv
-
-# Install dependencies using uv
-RUN uv pip install --system --no-cache \\
-    pandas scikit-learn mlflow boto3 sagemaker-training joblib
-
-# Copy training directory
-COPY training/ /opt/ml/code/
-
-ENV PYTHONUNBUFFERED=1
-"""
-        dockerfile_path.write_text(dockerfile_content)
-        logger.info(f"Created {dockerfile_path}")
+        raise FileNotFoundError(
+            f"Dockerfile not found: {dockerfile_path}. "
+            "Please ensure Dockerfile.train exists in the training directory."
+        )
 
     image_name = "mlflow-sagemaker-train:latest"
+    build_context = Path(__file__).parent
 
-    # Check if image exists
-    result = subprocess.run(
-        ["docker", "images", "-q", image_name], capture_output=True, text=True
+    docker_mgr = DockerManager()
+    return docker_mgr.build_image(
+        image_name=image_name,
+        dockerfile_path=dockerfile_path,
+        build_context=build_context,
     )
-
-    if result.stdout.strip():
-        logger.info(f"✓ Docker image '{image_name}' already exists")
-        return image_name
-
-    # Build image
-    logger.info(f"Building Docker image: {image_name}")
-    build_cmd = [
-        "docker",
-        "build",
-        "-t",
-        image_name,
-        "-f",
-        str(dockerfile_path),
-        str(dockerfile_path.parent),
-    ]
-
-    result = subprocess.run(build_cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.error(f"Docker build failed:\n{result.stderr}")
-        raise RuntimeError(f"Failed to build Docker image: {result.stderr}")
-
-    logger.info(f"✓ Built Docker image: {image_name}")
-    return image_name
 
 
 def train_with_sagemaker():
@@ -164,8 +131,8 @@ def train_with_sagemaker():
     sagemaker_session = LocalSession()
     sagemaker_session.config = {"local": {"local_code": True}}
 
-    # Find data
-    data_file = Path(__file__).parent / "data" / "heloc_dataset_v1.csv"
+    # Find data (data is at root level, go up from local/)
+    data_file = Path(__file__).parent.parent / "data" / "heloc_dataset_v1.csv"
     if not data_file.exists():
         raise FileNotFoundError(f"Dataset not found: {data_file}")
 
@@ -173,9 +140,16 @@ def train_with_sagemaker():
     output_path_local = f"file://{Path(__file__).parent / 'model_output'}"
 
     # Get IAM role from stack (or fallback to dummy)
-    iam_role = get_stack_role_arn()
+    try:
+        iam_role = get_stack_role_arn()
+    except RuntimeError as e:
+        # If stack not deployed, use dummy role for LocalStack
+        logger.warning(f"Could not get role from stack: {e}")
+        logger.info("Using dummy role for LocalStack testing")
+        iam_role = "arn:aws:iam::111111111111:role/service-role/AmazonSageMaker-ExecutionRole-20200101T000001"
 
-    # Create estimator with MinIO environment variables for MLflow
+    # Create estimator with LocalStack S3 environment variables for MLflow
+    training_dir = Path(__file__).parent / "training"
     estimator = Estimator(
         image_uri=image_name,
         role=iam_role,
@@ -183,18 +157,19 @@ def train_with_sagemaker():
         instance_count=1,
         sagemaker_session=sagemaker_session,
         output_path=output_path_local,
+        source_dir=str(training_dir),
         hyperparameters={
             "mlflow-tracking-uri": MLFLOW_TRACKING_URI,
             "mlflow-experiment": "credit-scoring-sagemaker",
             "n-estimators": 100,
             "max-depth": 10,
         },
-        entry_point="training/train.py",
+        entry_point="train.py",
         environment={
-            # MinIO/S3 environment variables for MLflow artifact storage
-            "AWS_ACCESS_KEY_ID": MINIO_ACCESS_KEY,
-            "AWS_SECRET_ACCESS_KEY": MINIO_SECRET_KEY,
-            "MLFLOW_S3_ENDPOINT_URL": MINIO_ENDPOINT,
+            # LocalStack S3 environment variables for MLflow artifact storage
+            "AWS_ACCESS_KEY_ID": AWS_ACCESS_KEY_ID,
+            "AWS_SECRET_ACCESS_KEY": AWS_SECRET_ACCESS_KEY,
+            "MLFLOW_S3_ENDPOINT_URL": LOCALSTACK_S3_ENDPOINT,
             "MLFLOW_S3_IGNORE_TLS": "true",
         },
     )
@@ -206,10 +181,8 @@ def train_with_sagemaker():
     # Train
     estimator.fit({"train": train_data_local})
 
-    logger.info("=" * 80)
-    logger.info("✅ Training complete!")
+    logger.info("Training complete!")
     logger.info("MLflow UI: http://localhost:5001")
-    logger.info("=" * 80)
 
 
 if __name__ == "__main__":

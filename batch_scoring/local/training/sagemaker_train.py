@@ -3,6 +3,7 @@
 Stores model in LocalStack S3.
 """
 
+import contextlib
 import logging
 from pathlib import Path
 
@@ -18,7 +19,7 @@ try:
     # Try as package (if scripts/__init__.py exists)
     from scripts.docker_utils import DockerManager
 except ImportError:
-    try:
+    with contextlib.suppress(Exception):
         # Try direct import (if running from local/ directory)
         import importlib.util
 
@@ -30,9 +31,6 @@ except ImportError:
             docker_utils = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(docker_utils)
             DockerManager = docker_utils.DockerManager
-    except Exception:
-        pass
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

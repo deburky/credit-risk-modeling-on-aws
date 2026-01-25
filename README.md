@@ -72,7 +72,7 @@ The `mlflow_on_aws/` folder contains a complete implementation of a MLflow track
 
 - **MLflow** for model tracking
 - **PostgreSQL** for storing MLflow experiments and runs
-- **MinIO** for storing MLflow artifacts (S3-compatible)
+- **S3** for storing MLflow artifacts
 - **SageMaker** for model training
 
 Run the workflow using the Makefile:
@@ -82,7 +82,7 @@ cd mlflow_on_aws && make start && make deploy-stack && make train
 ```
 
 > [!NOTE]
-> See the [README.md](mlflow_on_aws/README.md) for detailed instructions.
+> See the [README.md](mlflow_on_aws/local/README.md) for detailed instructions.
 
 ### 🧪 SageMaker Endpoints with A/B Testing Lambda
 
