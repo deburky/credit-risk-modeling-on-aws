@@ -14,7 +14,7 @@ import mlflow
 import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 # Configure logging BEFORE importing mlflow to suppress request header warnings
@@ -118,6 +118,10 @@ def train():
     logger.info(f"MLflow Experiment: {args.mlflow_experiment}")
     logger.info(f"Training data: {args.train}")
 
+    # Ensure no active run before starting (MLflow 3.0 may auto-start runs)
+    if mlflow.active_run() is not None:
+        mlflow.end_run()
+
     # Load HELOC dataset
     data_file = Path(args.train) / "heloc_dataset_v1.csv"
     if not data_file.exists():
@@ -144,6 +148,10 @@ def train():
 
     # Train with MLflow tracking
     with mlflow.start_run():
+        mlflow.set_tag(
+            "mlflow.note.content", "Basic RF model for HELOC risk prediction"
+        )
+        mlflow.set_tag("model_type", "RandomForestClassifier")
         mlflow.log_param("n_estimators", args.n_estimators)
         mlflow.log_param("max_depth", args.max_depth)
         mlflow.log_param("model_type", "RandomForest")
@@ -158,47 +166,46 @@ def train():
         model.fit(X_train, y_train)
 
         # Evaluate
-        test_pred = model.predict(X_test)
-        test_acc = accuracy_score(y_test, test_pred)
+        test_pred = model.predict_proba(X_test)[:, 1]
+        test_gini = roc_auc_score(y_test, test_pred) * 2 - 1
+        test_log_loss = log_loss(y_test, test_pred)
 
-        mlflow.log_metric("test_accuracy", test_acc)
+        mlflow.log_metric("test_gini", test_gini)
+        mlflow.log_metric("test_log_loss", test_log_loss)
 
-        # Log model artifacts directly using log_artifact (works with LocalStack S3)
-        # mlflow.sklearn.log_model() uses logged-models API which may not be available
-        # Instead, save model locally and log as artifact using the artifact API
-        import tempfile
-
+        # Log model using mlflow.sklearn.log_model() (MLflow 3.0+ with logged-models API)
+        # This uses the logged-models API which provides better model tracking
         try:
-            logger.info("Saving model and logging as artifact to S3 (LocalStack)...")
-            # Create temporary directory for model artifacts
-            with tempfile.TemporaryDirectory() as tmpdir:
-                model_path = os.path.join(tmpdir, "model.joblib")
-                joblib.dump(model, model_path)
-
-                # Log the model file as an artifact (uses artifact API)
-                logger.info(
-                    f"Uploading artifact to MLflow server (size: {os.path.getsize(model_path)} bytes)..."
-                )
-                mlflow.log_artifact(model_path, "model")
-            logger.info("✓ Model logged successfully to MLflow S3")
+            logger.info("Logging model using mlflow.sklearn.log_model()...")
+            mlflow.sklearn.log_model(model, "model")
+            logger.info("✓ Model logged successfully to MLflow using logged-models API")
         except Exception as e:
             error_msg = str(e)
             error_type = type(e).__name__
-            logger.error(f"Error logging model artifact: {error_type}: {error_msg}")
+            logger.error(f"Error logging model: {error_type}: {error_msg}")
             import traceback
 
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             logger.warning(
-                "⚠️  Failed to log model artifact to MLflow. "
+                "⚠ Failed to log model to MLflow. "
                 "Model metrics and parameters are still logged, and model is saved to SageMaker output directory."
             )
-    logger.info(f"Test Accuracy: {test_acc:.4f}")
+    logger.info(f"Test Gini: {test_gini:.4f}")
     logger.info("✓ Training complete!")
 
-    # Save model for SageMaker
-    model_path = os.path.join(args.model_dir, "model.joblib")
-    joblib.dump(model, model_path)
-    logger.info(f"Model saved to: {model_path}")
+    # Save model for SageMaker in tar.gz format (SageMaker native format)
+    import tarfile
+
+    # Save model as joblib first
+    model_joblib_path = os.path.join(args.model_dir, "model.joblib")
+    joblib.dump(model, model_joblib_path)
+    logger.info(f"Model saved to: {model_joblib_path}")
+
+    # Package as tar.gz for SageMaker deployment
+    model_tar_path = os.path.join(args.model_dir, "model.tar.gz")
+    with tarfile.open(model_tar_path, "w:gz") as tar:
+        tar.add(model_joblib_path, arcname="model.joblib")
+    logger.info(f"Model packaged as tar.gz for SageMaker: {model_tar_path}")
 
 
 if __name__ == "__main__":

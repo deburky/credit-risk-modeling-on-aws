@@ -70,15 +70,23 @@ cd batch_scoring/local && make run-workflow
 
 The `mlflow_on_aws/` folder contains a complete implementation of a MLflow tracking server on AWS using:
 
-- **MLflow** for model tracking
+- **MLflow 3.0+** for model tracking with logged-models API support
 - **PostgreSQL** for storing MLflow experiments and runs
-- **S3** for storing MLflow artifacts
-- **SageMaker** for model training
+- **S3/LocalStack** for storing MLflow artifacts
+- **SageMaker** for model training with MLflow integration
+
+Features:
+
+- Model logging using `mlflow.sklearn.log_model()` (logged-models API)
+- SageMaker-ready models packaged as `tar.gz` format
+- LocalStack S3 for local development
 
 Run the workflow using the Makefile:
 
 ```bash
-cd mlflow_on_aws && make start && make deploy-stack && make train
+cd mlflow_on_aws/local && make start
+cd .. && make deploy-stack
+cd local && make train
 ```
 
 > [!NOTE]
